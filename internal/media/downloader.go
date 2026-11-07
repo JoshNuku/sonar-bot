@@ -37,6 +37,29 @@ type inflightDownload struct {
 	err  error
 }
 
+func resolveCookiesFile() string {
+	// 1. Check explicit path env var
+	if p := strings.TrimSpace(os.Getenv("YOUTUBE_COOKIES_PATH")); p != "" {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// 2. Check Render Secret Files default mount or local cookies.txt
+	for _, candidate := range []string{"/etc/secrets/cookies.txt", "cookies.txt"} {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	// 3. Check inline YOUTUBE_COOKIES env var content
+	if raw := strings.TrimSpace(os.Getenv("YOUTUBE_COOKIES")); raw != "" {
+		tmpCookies := filepath.Join(os.TempDir(), "sonar_yt_cookies.txt")
+		if err := os.WriteFile(tmpCookies, []byte(raw), 0600); err == nil {
+			return tmpCookies
+		}
+	}
+	return ""
+}
+
 func resolveYtDlpCommand() (string, []string) {
 	// Prefer native Python module if installed (avoids 4-5s Windows PyInstaller .exe unpacking overhead)
 	if pyPath, err := exec.LookPath("python"); err == nil {
@@ -333,6 +356,9 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
 
 	args := append([]string{}, d.baseArgs...)
+	if cookiesPath := resolveCookiesFile(); cookiesPath != "" {
+		args = append(args, "--cookies", cookiesPath)
+	}
 	if format == "audio" {
 		// Strictly select high-bitrate 128-160kbps 44.1kHz stereo AAC (format 140 / ba[ext=m4a]), never 48kbps format 139
 		args = append(args,
