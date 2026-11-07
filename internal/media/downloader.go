@@ -38,23 +38,33 @@ type inflightDownload struct {
 }
 
 func resolveCookiesFile() string {
-	// 1. Check explicit path env var
-	if p := strings.TrimSpace(os.Getenv("YOUTUBE_COOKIES_PATH")); p != "" {
-		if _, err := os.Stat(p); err == nil {
-			return p
+	writableCookies := filepath.Join(os.TempDir(), "sonar_yt_cookies.txt")
+	if info, err := os.Stat(writableCookies); err == nil && info.Size() > 0 {
+		return writableCookies
+	}
+
+	// Copy from read-only mount (e.g. Render /etc/secrets/cookies.txt) into writable /tmp
+	sources := []string{
+		strings.TrimSpace(os.Getenv("YOUTUBE_COOKIES_PATH")),
+		"/etc/secrets/cookies.txt",
+		"cookies.txt",
+	}
+	for _, src := range sources {
+		if src == "" {
+			continue
+		}
+		if data, err := os.ReadFile(src); err == nil && len(data) > 0 {
+			if err := os.WriteFile(writableCookies, data, 0600); err == nil {
+				return writableCookies
+			}
+			return src
 		}
 	}
-	// 2. Check Render Secret Files default mount or local cookies.txt
-	for _, candidate := range []string{"/etc/secrets/cookies.txt", "cookies.txt"} {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	// 3. Check inline YOUTUBE_COOKIES env var content
+
+	// Fallback: inline YOUTUBE_COOKIES env var content
 	if raw := strings.TrimSpace(os.Getenv("YOUTUBE_COOKIES")); raw != "" {
-		tmpCookies := filepath.Join(os.TempDir(), "sonar_yt_cookies.txt")
-		if err := os.WriteFile(tmpCookies, []byte(raw), 0600); err == nil {
-			return tmpCookies
+		if err := os.WriteFile(writableCookies, []byte(raw), 0600); err == nil {
+			return writableCookies
 		}
 	}
 	return ""
@@ -360,27 +370,33 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 		args = append(args, "--cookies", cookiesPath)
 	}
 	if format == "audio" {
-		// Strictly select high-bitrate 128-160kbps 44.1kHz stereo AAC (format 140 / ba[ext=m4a]), never 48kbps format 139
+		// Select high-bitrate M4A (140) or best audio/video fallback
 		args = append(args,
 			"--js-runtimes", "node",
 			"--no-warnings",
 			"--concurrent-fragments", "16",
 			"--match-filter", "duration <= 900",
-			"-f", "140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba",
+			"-f", "140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba/b",
 			"--max-filesize", "48M",
 			"--no-playlist",
+		)
+		if _, err := exec.LookPath("ffmpeg"); err == nil {
+			args = append(args, "-x", "--audio-format", "m4a")
+		}
+		args = append(args,
 			"-o", outTemplate,
 			"--print", "after_move:filepath",
 			videoURL,
 		)
 	} else {
-		// Select 720p HD MP4 (capped at 15 minutes)
+		// Select 720p HD MP4 (capped at 15 minutes) with broad fallback
 		args = append(args,
 			"--js-runtimes", "node",
 			"--no-warnings",
 			"--concurrent-fragments", "16",
 			"--match-filter", "duration <= 900",
-			"-f", "22/best[height<=720][ext=mp4]/best[ext=mp4]/best",
+			"-f", "22/18/best[height<=720][ext=mp4]/best[ext=mp4]/bv*[height<=720]+ba/b",
+			"--merge-output-format", "mp4",
 			"--max-filesize", "48M",
 			"--no-playlist",
 			"-o", outTemplate,
