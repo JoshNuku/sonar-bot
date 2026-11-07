@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: sonar-bot
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_CURRENCY
+        value: GHS
+      - key: TIER_DAY_PRICE
+        value: "300"
+      - key: TIER_WEEKLY_PRICE
+        value: "700"
+      - key: TIER_MONTHLY_PRICE
+        value: "1200"
+      - key: DAILY_FREE_LIMIT
+        value: "5"
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: NTFY_URL
+        value: https://ntfy.sh/sonar-bot-119
+
