@@ -1,10 +1,13 @@
 package media
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -21,6 +24,69 @@ type TrackInfo struct {
 	Channel  string
 }
 
+// Embedded persistent Python worker that keeps yt_dlp and YoutubeDL warm in RAM,
+// eliminating the 10-15s Python import & initialization penalty on 0.1 vCPU hosts (like Render Free Tier).
+const persistentWorkerPy = `import sys, os, json, yt_dlp
+
+cache_dir = sys.argv[1]
+cookies_file = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
+temp_dir = sys.argv[3]
+
+def make_opts(fmt):
+    opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'noplaylist': True,
+        'cachedir': cache_dir,
+        'concurrent_fragment_downloads': 4,
+        'max_filesize': 48 * 1024 * 1024,
+        'outtmpl': os.path.join(temp_dir, f'sonar_{fmt}_%(id)s.%(ext)s'),
+        'js_runtimes': {'node': {}},
+    }
+    if cookies_file and os.path.exists(cookies_file):
+        opts['cookiefile'] = cookies_file
+    if fmt == 'audio':
+        opts['format'] = '140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba/b'
+    else:
+        opts['format'] = '18/22/best[height<=720][ext=mp4]/best[ext=mp4]/bv*[height<=720]+ba/b'
+        opts['merge_output_format'] = 'mp4'
+    return opts
+
+ydl_instances = {
+    'audio': yt_dlp.YoutubeDL(make_opts('audio')),
+    'video': yt_dlp.YoutubeDL(make_opts('video')),
+}
+
+sys.stdout.write(json.dumps({"ready": True}) + "\n")
+sys.stdout.flush()
+
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        req = json.loads(line)
+        vid = req.get('video_id')
+        fmt = req.get('format', 'audio')
+        url = f'https://www.youtube.com/watch?v={vid}'
+        ydl = ydl_instances.get(fmt, ydl_instances['audio'])
+        info = ydl.extract_info(url, download=True)
+        path = ydl.prepare_filename(info)
+        if not os.path.exists(path) and info.get('requested_downloads'):
+            path = info['requested_downloads'][0].get('filepath', path)
+        sys.stdout.write(json.dumps({"ok": True, "path": path}) + "\n")
+    except Exception as e:
+        sys.stdout.write(json.dumps({"ok": False, "error": str(e)}) + "\n")
+    sys.stdout.flush()
+`
+
+type warmWorker struct {
+	mu     sync.Mutex
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout *bufio.Reader
+}
+
 type Downloader struct {
 	concurrencySem chan struct{}
 	cmdName        string
@@ -29,6 +95,7 @@ type Downloader struct {
 	trackMeta      sync.Map // videoID -> TrackInfo
 	inflightMu     sync.Mutex
 	inflight       map[string]*inflightDownload
+	worker         *warmWorker
 }
 
 type inflightDownload struct {
@@ -43,7 +110,6 @@ func resolveCookiesFile() string {
 		return writableCookies
 	}
 
-	// Copy from read-only mount (e.g. Render /etc/secrets/cookies.txt) into writable /tmp
 	sources := []string{
 		strings.TrimSpace(os.Getenv("YOUTUBE_COOKIES_PATH")),
 		"/etc/secrets/cookies.txt",
@@ -61,7 +127,6 @@ func resolveCookiesFile() string {
 		}
 	}
 
-	// Fallback: inline YOUTUBE_COOKIES env var content
 	if raw := strings.TrimSpace(os.Getenv("YOUTUBE_COOKIES")); raw != "" {
 		if err := os.WriteFile(writableCookies, []byte(raw), 0600); err == nil {
 			return writableCookies
@@ -70,13 +135,21 @@ func resolveCookiesFile() string {
 	return ""
 }
 
-func resolveYtDlpCommand() (string, []string) {
-	// Prefer native Python module if installed (avoids 4-5s Windows PyInstaller .exe unpacking overhead)
-	if pyPath, err := exec.LookPath("python"); err == nil {
-		check := exec.Command(pyPath, "-c", "import yt_dlp")
-		if check.Run() == nil {
-			return pyPath, []string{"-m", "yt_dlp"}
+func resolvePythonBinary() string {
+	for _, name := range []string{"python3", "python"} {
+		if pyPath, err := exec.LookPath(name); err == nil {
+			check := exec.Command(pyPath, "-c", "import yt_dlp")
+			if check.Run() == nil {
+				return pyPath
+			}
 		}
+	}
+	return ""
+}
+
+func resolveYtDlpCommand() (string, []string) {
+	if pyPath := resolvePythonBinary(); pyPath != "" {
+		return pyPath, []string{"-m", "yt_dlp"}
 	}
 	if path, err := exec.LookPath("yt-dlp"); err == nil {
 		return path, nil
@@ -91,9 +164,85 @@ func resolveYtDlpCommand() (string, []string) {
 	return "yt-dlp", nil
 }
 
+func startWarmWorker() *warmWorker {
+	pyPath := resolvePythonBinary()
+	if pyPath == "" {
+		return nil
+	}
+
+	scriptPath := filepath.Join(os.TempDir(), "sonar_yt_worker.py")
+	if err := os.WriteFile(scriptPath, []byte(persistentWorkerPy), 0600); err != nil {
+		return nil
+	}
+
+	cacheDir := filepath.Join(os.TempDir(), "sonar_ytdlp_cache")
+	cookiesFile := resolveCookiesFile()
+
+	cmd := exec.Command(pyPath, "-u", scriptPath, cacheDir, cookiesFile, os.TempDir())
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil
+	}
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil
+	}
+	if err := cmd.Start(); err != nil {
+		return nil
+	}
+
+	reader := bufio.NewReader(stdoutPipe)
+	line, err := reader.ReadString('\n')
+	if err != nil || !strings.Contains(line, `"ready"`) {
+		_ = cmd.Process.Kill()
+		return nil
+	}
+
+	log.Printf("Warm yt_dlp Python worker initialized in memory (zero cold-start mode)")
+	return &warmWorker{
+		cmd:    cmd,
+		stdin:  stdin,
+		stdout: reader,
+	}
+}
+
+func (w *warmWorker) download(videoID, format string) (string, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	reqBytes, _ := json.Marshal(map[string]string{
+		"video_id": videoID,
+		"format":   format,
+	})
+	if _, err := w.stdin.Write(append(reqBytes, '\n')); err != nil {
+		return "", err
+	}
+
+	line, err := w.stdout.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+
+	var resp struct {
+		OK    bool   `json:"ok"`
+		Path  string `json:"path"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(line), &resp); err != nil {
+		return "", err
+	}
+	if !resp.OK {
+		return "", fmt.Errorf("worker error: %s", resp.Error)
+	}
+	if _, err := os.Stat(resp.Path); err != nil {
+		return "", fmt.Errorf("file missing at %s", resp.Path)
+	}
+	return resp.Path, nil
+}
+
 func NewDownloader(maxParallel int) *Downloader {
 	cmdName, baseArgs := resolveYtDlpCommand()
-	return &Downloader{
+	d := &Downloader{
 		concurrencySem: make(chan struct{}, maxParallel),
 		cmdName:        cmdName,
 		baseArgs:       baseArgs,
@@ -102,6 +251,10 @@ func NewDownloader(maxParallel int) *Downloader {
 		},
 		inflight: make(map[string]*inflightDownload),
 	}
+	go func() {
+		d.worker = startWarmWorker()
+	}()
+	return d
 }
 
 func (d *Downloader) GetCachedTrackInfo(videoID string) (TrackInfo, bool) {
@@ -117,7 +270,6 @@ func (d *Downloader) RememberTrack(info TrackInfo) {
 	}
 }
 
-// Typed structs for YouTube InnerTube search to strictly preserve result order.
 type innerTubeSearchResponse struct {
 	Contents struct {
 		TwoColumnSearchResultsRenderer struct {
@@ -301,8 +453,6 @@ func (d *Downloader) ResolveTracks(ctx context.Context, query string, maxResults
 	return results, nil
 }
 
-// PrefetchAudio starts warming/downloading the audio stream in the background when a user selects a track,
-// only if no other download is currently using the CPU.
 func (d *Downloader) PrefetchAudio(videoID string) {
 	if len(d.concurrencySem) > 0 {
 		return
@@ -317,7 +467,6 @@ func (d *Downloader) PrefetchAudio(videoID string) {
 func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string) (string, error) {
 	key := fmt.Sprintf("%s:%s", format, videoID)
 
-	// Deduplicate concurrent/prefetched downloads for the same videoID + format
 	d.inflightMu.Lock()
 	if existing, ok := d.inflight[key]; ok {
 		d.inflightMu.Unlock()
@@ -345,7 +494,6 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 		d.inflightMu.Unlock()
 	}()
 
-	// Fastpath if prefetched file already exists on disk
 	globPattern := filepath.Join(os.TempDir(), fmt.Sprintf("sonar_%s_%s.*", format, videoID))
 	if matches, err := filepath.Glob(globPattern); err == nil {
 		for _, m := range matches {
@@ -366,6 +514,15 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 		return "", ctx.Err()
 	}
 
+	// 1. Fastpath: Use warm in-memory Python yt_dlp daemon (skips 12-15s Python import & cookie load on 0.1 vCPU)
+	if d.worker != nil {
+		if path, err := d.worker.download(videoID, format); err == nil && path != "" {
+			call.path = path
+			return path, nil
+		}
+	}
+
+	// 2. Fallback: Spawn CLI process
 	outTemplate := filepath.Join(os.TempDir(), fmt.Sprintf("sonar_%s_%%(id)s.%%(ext)s", format))
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
 
@@ -375,7 +532,6 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 	}
 	cacheDir := filepath.Join(os.TempDir(), "sonar_ytdlp_cache")
 	if format == "audio" {
-		// Stream native M4A (format 140 / ba[ext=m4a]) directly without ffmpeg CPU re-encoding
 		args = append(args,
 			"--cache-dir", cacheDir,
 			"--js-runtimes", "node",
@@ -390,14 +546,13 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 			videoURL,
 		)
 	} else {
-		// Prefer pre-muxed MP4 (18/22) first to avoid ffmpeg CPU muxing on 0.1 vCPU
 		args = append(args,
 			"--cache-dir", cacheDir,
 			"--js-runtimes", "node",
 			"--no-warnings",
 			"--concurrent-fragments", "4",
 			"--match-filter", "duration <= 900",
-			"-f", "22/18/best[height<=720][ext=mp4]/best[ext=mp4]/bv*[height<=720]+ba/b",
+			"-f", "18/22/best[height<=720][ext=mp4]/best[ext=mp4]/bv*[height<=720]+ba/b",
 			"--merge-output-format", "mp4",
 			"--max-filesize", "48M",
 			"--no-playlist",
