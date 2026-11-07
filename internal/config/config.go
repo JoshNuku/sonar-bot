@@ -76,6 +76,21 @@ func parseEnvInt(key string, defaultVal int) int {
 	return parsed
 }
 
+// sanitizeWebhookSecret ensures the secret only contains Telegram-allowed characters (A-Z, a-z, 0-9, _, -).
+func sanitizeWebhookSecret(raw string) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(raw) {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	res := b.String()
+	if len(res) > 256 {
+		res = res[:256]
+	}
+	return res
+}
+
 func LoadConfig() Config {
 	loadDotEnv(".env")
 
@@ -90,20 +105,20 @@ func LoadConfig() Config {
 	}
 
 	cfg := Config{
-		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		TelegramSecret:   os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
-		GroqAPIKey:       os.Getenv("GROQ_API_KEY"),
+		TelegramBotToken: strings.Trim(strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")), `"'`),
+		TelegramSecret:   sanitizeWebhookSecret(os.Getenv("TELEGRAM_WEBHOOK_SECRET")),
+		GroqAPIKey:       strings.Trim(strings.TrimSpace(os.Getenv("GROQ_API_KEY")), `"'`),
 		GroqModel:        groqModel,
-		PaystackSecret:   os.Getenv("PAYSTACK_SECRET_KEY"),
+		PaystackSecret:   strings.Trim(strings.TrimSpace(os.Getenv("PAYSTACK_SECRET_KEY")), `"'`),
 		PaystackCurrency: currency,
 		TierDayPrice:     parseEnvInt("TIER_DAY_PRICE", 300),
 		TierWeeklyPrice:  parseEnvInt("TIER_WEEKLY_PRICE", 700),
 		TierMonthlyPrice: parseEnvInt("TIER_MONTHLY_PRICE", 1200),
 		DailyFreeLimit:   parseEnvInt("DAILY_FREE_LIMIT", 5),
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		PublicURL:        strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_URL")), "/"),
-		Port:             os.Getenv("PORT"),
-		NtfyURL:          os.Getenv("NTFY_URL"),
+		DatabaseURL:      strings.Trim(strings.TrimSpace(os.Getenv("DATABASE_URL")), `"'`),
+		PublicURL:        strings.TrimRight(strings.Trim(strings.TrimSpace(os.Getenv("PUBLIC_URL")), `"'`), "/"),
+		Port:             strings.Trim(strings.TrimSpace(os.Getenv("PORT")), `"'`),
+		NtfyURL:          strings.Trim(strings.TrimSpace(os.Getenv("NTFY_URL")), `"'`),
 	}
 
 	if cfg.NtfyURL == "" {
