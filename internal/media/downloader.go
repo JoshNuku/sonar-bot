@@ -301,8 +301,12 @@ func (d *Downloader) ResolveTracks(ctx context.Context, query string, maxResults
 	return results, nil
 }
 
-// PrefetchAudio starts warming/downloading the audio stream in the background when a user selects a track.
+// PrefetchAudio starts warming/downloading the audio stream in the background when a user selects a track,
+// only if no other download is currently using the CPU.
 func (d *Downloader) PrefetchAudio(videoID string) {
+	if len(d.concurrencySem) > 0 {
+		return
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -369,31 +373,29 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 	if cookiesPath := resolveCookiesFile(); cookiesPath != "" {
 		args = append(args, "--cookies", cookiesPath)
 	}
+	cacheDir := filepath.Join(os.TempDir(), "sonar_ytdlp_cache")
 	if format == "audio" {
-		// Select high-bitrate M4A (140) or best audio/video fallback
+		// Stream native M4A (format 140 / ba[ext=m4a]) directly without ffmpeg CPU re-encoding
 		args = append(args,
+			"--cache-dir", cacheDir,
 			"--js-runtimes", "node",
 			"--no-warnings",
-			"--concurrent-fragments", "16",
+			"--concurrent-fragments", "4",
 			"--match-filter", "duration <= 900",
 			"-f", "140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba/b",
 			"--max-filesize", "48M",
 			"--no-playlist",
-		)
-		if _, err := exec.LookPath("ffmpeg"); err == nil {
-			args = append(args, "-x", "--audio-format", "m4a")
-		}
-		args = append(args,
 			"-o", outTemplate,
 			"--print", "after_move:filepath",
 			videoURL,
 		)
 	} else {
-		// Select 720p HD MP4 (capped at 15 minutes) with broad fallback
+		// Prefer pre-muxed MP4 (18/22) first to avoid ffmpeg CPU muxing on 0.1 vCPU
 		args = append(args,
+			"--cache-dir", cacheDir,
 			"--js-runtimes", "node",
 			"--no-warnings",
-			"--concurrent-fragments", "16",
+			"--concurrent-fragments", "4",
 			"--match-filter", "duration <= 900",
 			"-f", "22/18/best[height<=720][ext=mp4]/best[ext=mp4]/bv*[height<=720]+ba/b",
 			"--merge-output-format", "mp4",
