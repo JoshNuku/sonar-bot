@@ -39,6 +39,20 @@ temp_dir = sys.argv[3]
 proxy = os.environ.get('YOUTUBE_PROXY') or os.environ.get('HTTP_PROXY')
 
 def make_opts(fmt, use_cookies=False):
+    last_prog = [0, 0.0]
+    def phook(d):
+        if d.get('status') == 'downloading':
+            total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+            down = d.get('downloaded_bytes') or 0
+            if total > 0:
+                pct = int((down / total) * 100)
+                now = time.time()
+                if (pct != last_prog[0] and now - last_prog[1] >= 1.2) or pct >= 100:
+                    last_prog[0] = pct
+                    last_prog[1] = now
+                    sys.stdout.write(json.dumps({"progress": True, "percent": pct}) + "\n")
+                    sys.stdout.flush()
+
     opts = {
         'quiet': True,
         'no_warnings': True,
@@ -50,6 +64,7 @@ def make_opts(fmt, use_cookies=False):
         'outtmpl': os.path.join(temp_dir, f'sonar_{fmt}_%(id)s.%(ext)s'),
         'js_runtimes': {'node': {}},
         'remote_components': ['ejs:github'],
+        'progress_hooks': [phook],
     }
     if proxy:
         opts['proxy'] = proxy
@@ -224,7 +239,7 @@ func startWarmWorker() *warmWorker {
 	}
 }
 
-func (w *warmWorker) download(videoID, format string) (string, error) {
+func (w *warmWorker) download(videoID, format string, onProgress func(percent int)) (string, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -236,26 +251,36 @@ func (w *warmWorker) download(videoID, format string) (string, error) {
 		return "", err
 	}
 
-	line, err := w.stdout.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
+	for {
+		line, err := w.stdout.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
 
-	var resp struct {
-		OK    bool   `json:"ok"`
-		Path  string `json:"path"`
-		Error string `json:"error"`
+		var resp struct {
+			OK       bool   `json:"ok"`
+			Path     string `json:"path"`
+			Error    string `json:"error"`
+			Progress bool   `json:"progress"`
+			Percent  int    `json:"percent"`
+		}
+		if err := json.Unmarshal([]byte(line), &resp); err != nil {
+			continue
+		}
+		if resp.Progress {
+			if onProgress != nil {
+				onProgress(resp.Percent)
+			}
+			continue
+		}
+		if !resp.OK {
+			return "", fmt.Errorf("worker error: %s", resp.Error)
+		}
+		if _, err := os.Stat(resp.Path); err != nil {
+			return "", fmt.Errorf("file missing at %s", resp.Path)
+		}
+		return resp.Path, nil
 	}
-	if err := json.Unmarshal([]byte(line), &resp); err != nil {
-		return "", err
-	}
-	if !resp.OK {
-		return "", fmt.Errorf("worker error: %s", resp.Error)
-	}
-	if _, err := os.Stat(resp.Path); err != nil {
-		return "", fmt.Errorf("file missing at %s", resp.Path)
-	}
-	return resp.Path, nil
 }
 
 func NewDownloader(maxParallel int) *Downloader {
@@ -478,11 +503,11 @@ func (d *Downloader) PrefetchAudio(videoID string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		_, _ = d.DownloadStream(ctx, videoID, "audio")
+		_, _ = d.DownloadStream(ctx, videoID, "audio", nil)
 	}()
 }
 
-func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string) (string, error) {
+func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string, onProgress func(percent int)) (string, error) {
 	key := fmt.Sprintf("%s:%s", format, videoID)
 
 	d.inflightMu.Lock()
@@ -534,7 +559,7 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 
 	// 1. Fastpath: Use warm in-memory Python yt_dlp daemon (skips 12-15s Python import & cookie load on 0.1 vCPU)
 	if d.worker != nil {
-		if path, err := d.worker.download(videoID, format); err == nil && path != "" {
+		if path, err := d.worker.download(videoID, format, onProgress); err == nil && path != "" {
 			call.path = path
 			return path, nil
 		}

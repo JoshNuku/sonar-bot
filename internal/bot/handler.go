@@ -399,6 +399,42 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	b.bot.Send(confirmMsg)
 }
 
+func renderProgressBar(percent int) string {
+	if percent > 100 {
+		percent = 100
+	}
+	if percent < 0 {
+		percent = 0
+	}
+	filled := percent / 10
+	var sb strings.Builder
+	for i := 0; i < 10; i++ {
+		if i < filled {
+			sb.WriteString("▰")
+		} else {
+			sb.WriteString("▱")
+		}
+	}
+	return fmt.Sprintf("[%s] %d%%", sb.String(), percent)
+}
+
+type progressReader struct {
+	r      io.Reader
+	total  int64
+	read   int64
+	onProg func(pct int)
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.r.Read(p)
+	pr.read += int64(n)
+	if pr.total > 0 && pr.onProg != nil {
+		pct := int((pr.read * 100) / pr.total)
+		pr.onProg(pct)
+	}
+	return n, err
+}
+
 func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 	parts := strings.SplitN(cb.Data, ":", 2)
 	if len(parts) != 2 {
@@ -554,7 +590,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 	}
 
 	// Cache Miss: Download stream & thumbnail in parallel
-	statusMsg, _ := b.bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("⏳ Downloading %s...", trackTitle)))
+	statusMsg, _ := b.bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("⏳ Downloading %s...\n%s", trackTitle, renderProgressBar(0))))
 
 	var (
 		filePath   string
@@ -562,12 +598,27 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 		thumbBytes []byte
 		thumbErr   error
 		wg         sync.WaitGroup
+		editMu     sync.Mutex
+		lastEdit   = time.Now()
 	)
+
+	onDownloadProgress := func(pct int) {
+		editMu.Lock()
+		defer editMu.Unlock()
+		now := time.Now()
+		if now.Sub(lastEdit) < 1300*time.Millisecond && pct < 100 {
+			return
+		}
+		lastEdit = now
+		text := fmt.Sprintf("⏳ Downloading %s...\n%s", trackTitle, renderProgressBar(pct))
+		edit := tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, text)
+		_, _ = b.bot.Send(edit)
+	}
 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		filePath, dlErr = b.dl.DownloadStream(ctx, videoID, format)
+		filePath, dlErr = b.dl.DownloadStream(ctx, videoID, format, onDownloadProgress)
 	}()
 	go func() {
 		defer wg.Done()
@@ -582,7 +633,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 	}
 	defer os.Remove(filePath)
 
-	b.bot.Send(tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, "📤 Uploading to Telegram..."))
+	b.bot.Send(tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, fmt.Sprintf("📤 Uploading to Telegram...\n%s", renderProgressBar(0))))
 
 	ext := filepath.Ext(filePath)
 	if ext == "" {
@@ -599,7 +650,20 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 		thumb = thumbBytes
 	}
 
-	fileID, uploadErr := b.sendMediaBuffered(ctx, chatID, format, filePath, uploadName, trackTitle, thumb)
+	onUploadProgress := func(pct int) {
+		editMu.Lock()
+		defer editMu.Unlock()
+		now := time.Now()
+		if now.Sub(lastEdit) < 1300*time.Millisecond && pct < 100 {
+			return
+		}
+		lastEdit = now
+		text := fmt.Sprintf("📤 Uploading to Telegram...\n%s", renderProgressBar(pct))
+		edit := tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, text)
+		_, _ = b.bot.Send(edit)
+	}
+
+	fileID, uploadErr := b.sendMediaBuffered(ctx, chatID, format, filePath, uploadName, trackTitle, thumb, onUploadProgress)
 	b.bot.Send(tgbotapi.NewDeleteMessage(chatID, statusMsg.MessageID))
 
 	if uploadErr != nil {
@@ -628,6 +692,7 @@ func (b *BotController) sendMediaBuffered(
 	uploadName string,
 	trackTitle string,
 	thumbBytes []byte,
+	onProgress func(pct int),
 ) (string, error) {
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
@@ -676,7 +741,12 @@ func (b *BotController) sendMediaBuffered(
 	}
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/%s", b.bot.Token, endpoint)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, &buf)
+	pr := &progressReader{
+		r:      &buf,
+		total:  int64(buf.Len()),
+		onProg: onProgress,
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, pr)
 	if err != nil {
 		return "", err
 	}
