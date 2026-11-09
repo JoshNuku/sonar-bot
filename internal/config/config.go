@@ -101,7 +101,7 @@ func LoadConfig() Config {
 
 	groqModel := os.Getenv("GROQ_MODEL")
 	if groqModel == "" {
-		groqModel = "openai/gpt-oss-20b"
+		groqModel = "qwen/qwen3.8-27b"
 	}
 
 	cfg := Config{

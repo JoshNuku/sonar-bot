@@ -27,35 +27,48 @@ type TrackInfo struct {
 // Embedded persistent Python worker that keeps yt_dlp and YoutubeDL warm in RAM,
 // eliminating the 10-15s Python import & initialization penalty on 0.1 vCPU hosts (like Render Free Tier).
 const persistentWorkerPy = `import sys, os, json, yt_dlp
+try:
+    import yt_dlp.utils._jsruntime as jsr
+    jsr.NodeJsRuntime.MIN_SUPPORTED_VERSION = (14, 0, 0)
+except Exception:
+    pass
 
 cache_dir = sys.argv[1]
 cookies_file = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
 temp_dir = sys.argv[3]
+proxy = os.environ.get('YOUTUBE_PROXY') or os.environ.get('HTTP_PROXY')
 
-def make_opts(fmt):
+def make_opts(fmt, use_cookies=False):
     opts = {
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
         'cachedir': cache_dir,
-        'concurrent_fragment_downloads': 4,
+        'concurrent_fragment_downloads': 16,
         'http_chunk_size': 10 * 1024 * 1024,
         'max_filesize': 48 * 1024 * 1024,
         'outtmpl': os.path.join(temp_dir, f'sonar_{fmt}_%(id)s.%(ext)s'),
         'js_runtimes': {'node': {}},
+        'remote_components': ['ejs:github'],
     }
-    if cookies_file and os.path.exists(cookies_file):
+    if proxy:
+        opts['proxy'] = proxy
+    if use_cookies and cookies_file and os.path.exists(cookies_file):
         opts['cookiefile'] = cookies_file
+    else:
+        opts['extractor_args'] = {'youtube': {'player_client': ['visionos']}}
     if fmt == 'audio':
-        opts['format'] = '140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba/b'
+        opts['format'] = '140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba'
     else:
         opts['format'] = '18/22/best[height<=720][ext=mp4]/best[ext=mp4]/bv*[height<=720]+ba/b'
         opts['merge_output_format'] = 'mp4'
     return opts
 
 ydl_instances = {
-    'audio': yt_dlp.YoutubeDL(make_opts('audio')),
-    'video': yt_dlp.YoutubeDL(make_opts('video')),
+    'audio': yt_dlp.YoutubeDL(make_opts('audio', False)),
+    'video': yt_dlp.YoutubeDL(make_opts('video', False)),
+    'audio_cookies': yt_dlp.YoutubeDL(make_opts('audio', True)),
+    'video_cookies': yt_dlp.YoutubeDL(make_opts('video', True)),
 }
 
 sys.stdout.write(json.dumps({"ready": True}) + "\n")
@@ -71,7 +84,11 @@ for line in sys.stdin:
         fmt = req.get('format', 'audio')
         url = f'https://www.youtube.com/watch?v={vid}'
         ydl = ydl_instances.get(fmt, ydl_instances['audio'])
-        info = ydl.extract_info(url, download=True)
+        try:
+            info = ydl.extract_info(url, download=True)
+        except Exception:
+            ydl = ydl_instances.get(f'{fmt}_cookies', ydl_instances['audio_cookies'])
+            info = ydl.extract_info(url, download=True)
         path = ydl.prepare_filename(info)
         if not os.path.exists(path) and info.get('requested_downloads'):
             path = info['requested_downloads'][0].get('filepath', path)
@@ -528,19 +545,23 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
 
 	args := append([]string{}, d.baseArgs...)
-	if cookiesPath := resolveCookiesFile(); cookiesPath != "" {
-		args = append(args, "--cookies", cookiesPath)
+	if p := strings.TrimSpace(os.Getenv("YOUTUBE_PROXY")); p != "" {
+		args = append(args, "--proxy", p)
+	} else if p := strings.TrimSpace(os.Getenv("HTTP_PROXY")); p != "" {
+		args = append(args, "--proxy", p)
 	}
 	cacheDir := filepath.Join(os.TempDir(), "sonar_ytdlp_cache")
 	if format == "audio" {
 		args = append(args,
 			"--cache-dir", cacheDir,
+			"--extractor-args", "youtube:player_client=visionos",
 			"--js-runtimes", "node",
+			"--remote-components", "ejs:github",
 			"--no-warnings",
 			"--http-chunk-size", "10M",
-			"--concurrent-fragments", "4",
+			"--concurrent-fragments", "16",
 			"--match-filter", "duration <= 900",
-			"-f", "140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba/b",
+			"-f", "140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba",
 			"--max-filesize", "48M",
 			"--no-playlist",
 			"-o", outTemplate,
@@ -550,10 +571,12 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string)
 	} else {
 		args = append(args,
 			"--cache-dir", cacheDir,
+			"--extractor-args", "youtube:player_client=visionos",
 			"--js-runtimes", "node",
+			"--remote-components", "ejs:github",
 			"--no-warnings",
 			"--http-chunk-size", "10M",
-			"--concurrent-fragments", "4",
+			"--concurrent-fragments", "16",
 			"--match-filter", "duration <= 900",
 			"-f", "18/22/best[height<=720][ext=mp4]/best[ext=mp4]/bv*[height<=720]+ba/b",
 			"--merge-output-format", "mp4",

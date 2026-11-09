@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"sonar/internal/ai"
@@ -28,6 +29,9 @@ func main() {
 	tgBot, err := tgbotapi.NewBotAPI(cfg.TelegramBotToken)
 	if err != nil {
 		log.Fatalf("Telegram API error: %v", err)
+	}
+	tgBot.Client = &http.Client{
+		Timeout: 20 * time.Second,
 	}
 
 	groq := ai.NewGroqClient(cfg.GroqAPIKey, cfg.GroqModel)
@@ -156,7 +160,7 @@ func main() {
 
 	_, _ = tgBot.Request(tgbotapi.DeleteWebhookConfig{})
 	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
+	u.Timeout = 10
 	updates := tgBot.GetUpdatesChan(u)
 
 	log.Printf("Sonar active on @%s via Long Polling", tgBot.Self.UserName)

@@ -1,13 +1,17 @@
 package bot
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +30,8 @@ type BotController struct {
 	dl       *media.Downloader
 	paystack *payment.PaystackService
 	notifier *Notifier
+	chatMu   sync.Mutex
+	chatMem  map[int64][]ai.ChatTurn
 }
 
 func NewBotController(
@@ -43,7 +49,30 @@ func NewBotController(
 		dl:       dl,
 		paystack: ps,
 		notifier: NewNotifier(ntfyURL),
+		chatMem:  make(map[int64][]ai.ChatTurn),
 	}
+}
+
+func (b *BotController) getChatHistory(chatID int64) []ai.ChatTurn {
+	b.chatMu.Lock()
+	defer b.chatMu.Unlock()
+	turns := b.chatMem[chatID]
+	out := make([]ai.ChatTurn, len(turns))
+	copy(out, turns)
+	return out
+}
+
+func (b *BotController) recordChatTurn(chatID int64, userMsg, assistantMsg string) {
+	b.chatMu.Lock()
+	defer b.chatMu.Unlock()
+	turns := append(b.chatMem[chatID], ai.ChatTurn{
+		UserMsg:      userMsg,
+		AssistantMsg: assistantMsg,
+	})
+	if len(turns) > 6 {
+		turns = turns[len(turns)-6:]
+	}
+	b.chatMem[chatID] = turns
 }
 
 func youtubeThumbnailURL(videoID string) string {
@@ -257,19 +286,14 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Send fast thinking indicator in background while checking quota & history
-	statusCh := make(chan tgbotapi.Message, 1)
-	go func() {
-		m, _ := b.bot.Send(tgbotapi.NewMessage(chatID, "💭 Thinking..."))
-		statusCh <- m
-	}()
+	// Show native Telegram typing status while evaluating
+	b.bot.Send(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping))
 
 	allowed, _, recentSongs, quotaErr := b.db.CheckQuota(ctx, chatID, username)
 
 	if strings.HasPrefix(text, "/history") {
-		statusMsg := <-statusCh
 		if len(recentSongs) == 0 {
-			b.bot.Send(tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, "🎶 You haven't downloaded any tracks yet. Send a song title like `First Person Shooter` to get started!"))
+			b.bot.Send(tgbotapi.NewMessage(chatID, "🎶 You haven't downloaded any tracks yet. Send a song title like `First Person Shooter` to get started!"))
 			return
 		}
 		var rows [][]tgbotapi.InlineKeyboardButton
@@ -285,34 +309,35 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 			))
 		}
 		kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
-		edit := tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, "🎧 **Your Recent Sonar History:**\nTap any track to grab it again:")
-		edit.ParseMode = "Markdown"
-		edit.ReplyMarkup = &kb
-		b.bot.Send(edit)
+		msg := tgbotapi.NewMessage(chatID, "🎧 **Your Recent Sonar History:**\nTap any track to grab it again:")
+		msg.ParseMode = "Markdown"
+		msg.ReplyMarkup = kb
+		b.bot.Send(msg)
 		return
 	}
 
-	parsed, parseErr := b.groq.ParseQuery(ctx, text, recentSongs)
-	statusMsg := <-statusCh
+	parsed, parseErr := b.groq.ParseQuery(ctx, text, recentSongs, b.getChatHistory(chatID))
 
 	if !allowed {
-		if statusMsg.MessageID != 0 {
-			b.bot.Send(tgbotapi.NewDeleteMessage(chatID, statusMsg.MessageID))
-		}
 		b.sendPaywall(chatID)
 		return
 	}
 
 	if parseErr != nil || parsed == nil {
 		log.Printf("Groq parse error for %q: %v", text, parseErr)
-		b.bot.Send(tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, "Couldn't process your message right now. Try sending a song title like 'First Person Shooter'."))
+		b.bot.Send(tgbotapi.NewMessage(chatID, "Couldn't process your message right now. Try sending a song title like 'First Person Shooter'."))
 		return
 	}
 
 	// Conversational AI reply if the user is chatting or asking for recommendations (does not consume download quota)
 	if !parsed.IsSongQuery {
-		edit := tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, parsed.Reply)
-		edit.ParseMode = "Markdown"
+		b.recordChatTurn(chatID, text, parsed.Reply)
+		reply := tgbotapi.NewMessage(chatID, parsed.Reply)
+		reply.ParseMode = "Markdown"
+
+		if len(parsed.Suggestions) > 3 {
+			parsed.Suggestions = parsed.Suggestions[:3]
+		}
 
 		if len(parsed.Suggestions) > 0 {
 			var rows [][]tgbotapi.InlineKeyboardButton
@@ -328,13 +353,13 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 			}
 			if len(rows) > 0 {
 				kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
-				edit.ReplyMarkup = &kb
+				reply.ReplyMarkup = kb
 			}
 		}
 
-		if _, err := b.bot.Send(edit); err != nil {
-			edit.ParseMode = ""
-			b.bot.Send(edit)
+		if _, err := b.bot.Send(reply); err != nil {
+			reply.ParseMode = ""
+			b.bot.Send(reply)
 		}
 		return
 	}
@@ -345,10 +370,11 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	}
 
 	query := parsed.SearchTerm
+	b.recordChatTurn(chatID, text, "Searched YouTube for: "+query)
 	tracks, err := b.dl.ResolveTracks(ctx, query, 5)
 	if err != nil || len(tracks) == 0 {
 		log.Printf("ResolveTracks error for %q: %v", query, err)
-		b.bot.Send(tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, "No matching results found on YouTube."))
+		b.bot.Send(tgbotapi.NewMessage(chatID, "No matching results found on YouTube."))
 		return
 	}
 
@@ -367,10 +393,10 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 
 	kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
 	prompt := fmt.Sprintf("🎧 **Confirm your song for:** `%s`\n\nSelect a track below:", query)
-	edit := tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, prompt)
-	edit.ParseMode = "Markdown"
-	edit.ReplyMarkup = &kb
-	b.bot.Send(edit)
+	confirmMsg := tgbotapi.NewMessage(chatID, prompt)
+	confirmMsg.ParseMode = "Markdown"
+	confirmMsg.ReplyMarkup = kb
+	b.bot.Send(confirmMsg)
 }
 
 func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
@@ -558,13 +584,6 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 
 	b.bot.Send(tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, "📤 Uploading to Telegram..."))
 
-	fileHandle, openErr := os.Open(filePath)
-	if openErr != nil {
-		b.bot.Send(tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, "❌ Failed to read downloaded media file."))
-		return
-	}
-	defer fileHandle.Close()
-
 	ext := filepath.Ext(filePath)
 	if ext == "" {
 		if format == "audio" {
@@ -573,44 +592,120 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 			ext = ".mp4"
 		}
 	}
-	namedUpload := tgbotapi.FileReader{
-		Name:   sanitizeFileName(trackTitle, ext),
-		Reader: fileHandle,
+	uploadName := sanitizeFileName(trackTitle, ext)
+
+	var thumb []byte
+	if thumbErr == nil && len(thumbBytes) > 0 {
+		thumb = thumbBytes
 	}
 
-	if format == "audio" {
-		audioCfg := tgbotapi.NewAudio(chatID, namedUpload)
-		if parts := strings.SplitN(trackTitle, " - ", 2); len(parts) == 2 {
-			audioCfg.Performer = strings.TrimSpace(parts[0])
-			audioCfg.Title = strings.TrimSpace(parts[1])
-		} else {
-			audioCfg.Title = trackTitle
-		}
-		audioCfg.Caption = fmt.Sprintf("🎧 %s", trackTitle)
-		if thumbErr == nil && len(thumbBytes) > 0 {
-			audioCfg.Thumb = tgbotapi.FileBytes{Name: "thumb.jpg", Bytes: thumbBytes}
-		}
-		msg, uploadErr := b.bot.Send(audioCfg)
-		if uploadErr == nil && msg.Audio != nil {
-			if cacheErr := b.db.SaveCachedFileID(ctx, videoID, cacheFormat, msg.Audio.FileID, trackTitle); cacheErr != nil {
+	fileID, uploadErr := b.sendMediaBuffered(ctx, chatID, format, filePath, uploadName, trackTitle, thumb)
+	b.bot.Send(tgbotapi.NewDeleteMessage(chatID, statusMsg.MessageID))
+
+	if uploadErr != nil {
+		log.Printf("Telegram upload error (%s, %s): %v", videoID, format, uploadErr)
+		return
+	}
+
+	go func(fID string) {
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer bgCancel()
+		if fID != "" {
+			if cacheErr := b.db.SaveCachedFileID(bgCtx, videoID, cacheFormat, fID, trackTitle); cacheErr != nil {
 				log.Printf("SaveCachedFileID error (%s, %s): %v", videoID, cacheFormat, cacheErr)
 			}
+		}
+		b.db.RecordUserSong(bgCtx, chatID, trackTitle)
+		_ = b.db.IncrementUsage(bgCtx, chatID)
+	}(fileID)
+}
+
+func (b *BotController) sendMediaBuffered(
+	ctx context.Context,
+	chatID int64,
+	format string,
+	filePath string,
+	uploadName string,
+	trackTitle string,
+	thumbBytes []byte,
+) (string, error) {
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	buf.Grow(len(fileData) + len(thumbBytes) + 4096)
+	mw := multipart.NewWriter(&buf)
+
+	_ = mw.WriteField("chat_id", strconv.FormatInt(chatID, 10))
+
+	endpoint := "sendAudio"
+	fieldName := "audio"
+	if format == "audio" {
+		_ = mw.WriteField("caption", fmt.Sprintf("🎧 %s", trackTitle))
+		if parts := strings.SplitN(trackTitle, " - ", 2); len(parts) == 2 {
+			_ = mw.WriteField("performer", strings.TrimSpace(parts[0]))
+			_ = mw.WriteField("title", strings.TrimSpace(parts[1]))
+		} else {
+			_ = mw.WriteField("title", trackTitle)
 		}
 	} else {
-		videoCfg := tgbotapi.NewVideo(chatID, namedUpload)
-		videoCfg.Caption = fmt.Sprintf("🎬 %s", trackTitle)
-		if thumbErr == nil && len(thumbBytes) > 0 {
-			videoCfg.Thumb = tgbotapi.FileBytes{Name: "thumb.jpg", Bytes: thumbBytes}
-		}
-		msg, uploadErr := b.bot.Send(videoCfg)
-		if uploadErr == nil && msg.Video != nil {
-			if cacheErr := b.db.SaveCachedFileID(ctx, videoID, cacheFormat, msg.Video.FileID, trackTitle); cacheErr != nil {
-				log.Printf("SaveCachedFileID error (%s, %s): %v", videoID, cacheFormat, cacheErr)
-			}
+		endpoint = "sendVideo"
+		fieldName = "video"
+		_ = mw.WriteField("caption", fmt.Sprintf("🎬 %s", trackTitle))
+		_ = mw.WriteField("supports_streaming", "true")
+	}
+
+	part, err := mw.CreateFormFile(fieldName, uploadName)
+	if err != nil {
+		return "", err
+	}
+	if _, err := part.Write(fileData); err != nil {
+		return "", err
+	}
+
+	if len(thumbBytes) > 0 {
+		if thumbPart, tErr := mw.CreateFormFile("thumb", "thumb.jpg"); tErr == nil {
+			_, _ = thumbPart.Write(thumbBytes)
 		}
 	}
 
-	b.db.RecordUserSong(ctx, chatID, trackTitle)
-	_ = b.db.IncrementUsage(ctx, chatID)
-	b.bot.Send(tgbotapi.NewDeleteMessage(chatID, statusMsg.MessageID))
+	if err := mw.Close(); err != nil {
+		return "", err
+	}
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/%s", b.bot.Token, endpoint)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, &buf)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.ContentLength = int64(buf.Len())
+
+	uploadClient := &http.Client{Timeout: 3 * time.Minute}
+	resp, err := uploadClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var apiResp tgbotapi.APIResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return "", err
+	}
+	if !apiResp.Ok {
+		return "", fmt.Errorf("telegram api error: %s", apiResp.Description)
+	}
+
+	var msg tgbotapi.Message
+	if err := json.Unmarshal(apiResp.Result, &msg); err == nil {
+		if msg.Audio != nil {
+			return msg.Audio.FileID, nil
+		}
+		if msg.Video != nil {
+			return msg.Video.FileID, nil
+		}
+	}
+	return "", nil
 }
