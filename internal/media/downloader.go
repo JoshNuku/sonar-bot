@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,8 +27,9 @@ type TrackInfo struct {
 }
 
 // Embedded persistent Python worker that keeps yt_dlp and YoutubeDL warm in RAM,
+// Embedded persistent Python worker that keeps yt_dlp and YoutubeDL warm in RAM,
 // eliminating the 10-15s Python import & initialization penalty on 0.1 vCPU hosts (like Render Free Tier).
-const persistentWorkerPy = `import sys, os, json, yt_dlp
+const persistentWorkerPy = `import sys, os, json, time, yt_dlp
 try:
     import yt_dlp.utils._jsruntime as jsr
     jsr.NodeJsRuntime.MIN_SUPPORTED_VERSION = (14, 0, 0)
@@ -38,23 +41,38 @@ cookies_file = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
 temp_dir = sys.argv[3]
 proxy = os.environ.get('YOUTUBE_PROXY') or os.environ.get('HTTP_PROXY')
 
-def make_opts(fmt, use_cookies=False):
-    last_prog = [0, 0.0]
-    def phook(d):
-        if d.get('status') == 'downloading':
-            total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
-            down = d.get('downloaded_bytes') or 0
-            if total > 0:
-                pct = int((down / total) * 100)
-                now = time.time()
-                if (pct != last_prog[0] and now - last_prog[1] >= 1.2) or pct >= 100:
-                    last_prog[0] = pct
-                    last_prog[1] = now
-                    sys.stdout.write(json.dumps({"progress": True, "percent": pct}) + "\n")
-                    sys.stdout.flush()
+last_prog = [0, 0.0]
 
+def phook(d):
+    if d.get('status') == 'downloading':
+        pct = None
+        total = d.get('total_bytes') or d.get('total_bytes_estimate')
+        down = d.get('downloaded_bytes')
+        if total and down:
+            pct = int((down / total) * 100)
+        elif d.get('fragment_index') is not None and d.get('fragment_count'):
+            pct = int((d['fragment_index'] / d['fragment_count']) * 100)
+        elif d.get('_percent') is not None:
+            pct = int(d['_percent'])
+        elif d.get('_percent_str'):
+            try:
+                pct = int(float(d['_percent_str'].replace('%', '').strip()))
+            except Exception:
+                pass
+
+        if pct is not None:
+            pct = max(0, min(100, pct))
+            now = time.time()
+            if (pct > last_prog[0] and now - last_prog[1] >= 1.0) or pct >= 100:
+                last_prog[0] = pct
+                last_prog[1] = now
+                sys.stdout.write(json.dumps({"progress": True, "percent": pct}) + "\n")
+                sys.stdout.flush()
+
+def make_opts(fmt, use_cookies=False):
     opts = {
         'quiet': True,
+        'noprogress': True,
         'no_warnings': True,
         'noplaylist': True,
         'cachedir': cache_dir,
@@ -79,13 +97,15 @@ def make_opts(fmt, use_cookies=False):
         opts['merge_output_format'] = 'mp4'
     return opts
 
-ydl_instances = {
-    'audio': yt_dlp.YoutubeDL(make_opts('audio', False)),
-    'video': yt_dlp.YoutubeDL(make_opts('video', False)),
-    'audio_cookies': yt_dlp.YoutubeDL(make_opts('audio', True)),
-    'video_cookies': yt_dlp.YoutubeDL(make_opts('video', True)),
-}
+ydl_instances = {}
 
+def get_ydl(fmt, use_cookies):
+    key = f"{fmt}_{use_cookies}"
+    if key not in ydl_instances:
+        ydl_instances[key] = yt_dlp.YoutubeDL(make_opts(fmt, use_cookies))
+    return ydl_instances[key]
+
+# Instantly acknowledge readiness so startWarmWorker never times out
 sys.stdout.write(json.dumps({"ready": True}) + "\n")
 sys.stdout.flush()
 
@@ -94,15 +114,17 @@ for line in sys.stdin:
     if not line:
         continue
     try:
+        last_prog[0] = 0
+        last_prog[1] = 0.0
         req = json.loads(line)
         vid = req.get('video_id')
         fmt = req.get('format', 'audio')
         url = f'https://www.youtube.com/watch?v={vid}'
-        ydl = ydl_instances.get(fmt, ydl_instances['audio'])
+        ydl = get_ydl(fmt, False)
         try:
             info = ydl.extract_info(url, download=True)
         except Exception:
-            ydl = ydl_instances.get(f'{fmt}_cookies', ydl_instances['audio_cookies'])
+            ydl = get_ydl(fmt, True)
             info = ydl.extract_info(url, download=True)
         path = ydl.prepare_filename(info)
         if not os.path.exists(path) and info.get('requested_downloads'):
@@ -220,6 +242,7 @@ func startWarmWorker() *warmWorker {
 	if err != nil {
 		return nil
 	}
+	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		return nil
 	}
@@ -227,6 +250,7 @@ func startWarmWorker() *warmWorker {
 	reader := bufio.NewReader(stdoutPipe)
 	line, err := reader.ReadString('\n')
 	if err != nil || !strings.Contains(line, `"ready"`) {
+		log.Printf("Warm worker handshake failed: err=%v, line=%q", err, line)
 		_ = cmd.Process.Kill()
 		return nil
 	}
@@ -576,54 +600,79 @@ func (d *Downloader) DownloadStream(ctx context.Context, videoID, format string,
 		args = append(args, "--proxy", p)
 	}
 	cacheDir := filepath.Join(os.TempDir(), "sonar_ytdlp_cache")
-	if format == "audio" {
-		args = append(args,
-			"--cache-dir", cacheDir,
-			"--extractor-args", "youtube:player_client=visionos",
-			"--js-runtimes", "node",
-			"--remote-components", "ejs:github",
-			"--no-warnings",
-			"--http-chunk-size", "10M",
-			"--concurrent-fragments", "16",
-			"--match-filter", "duration <= 900",
-			"-f", "140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba",
-			"--max-filesize", "48M",
-			"--no-playlist",
-			"-o", outTemplate,
-			"--print", "after_move:filepath",
-			videoURL,
-		)
+	cookiesFile := resolveCookiesFile()
+
+	args = append(args,
+		"--cache-dir", cacheDir,
+		"--js-runtimes", "node",
+		"--remote-components", "ejs:github",
+		"--no-warnings",
+		"--progress",
+		"--newline",
+		"--http-chunk-size", "10M",
+		"--concurrent-fragments", "16",
+		"--match-filter", "duration <= 900",
+		"--max-filesize", "48M",
+		"--no-playlist",
+		"-o", outTemplate,
+		"--print", "after_move:filepath",
+	)
+
+	if cookiesFile != "" {
+		args = append(args, "--cookies", cookiesFile)
 	} else {
-		args = append(args,
-			"--cache-dir", cacheDir,
-			"--extractor-args", "youtube:player_client=visionos",
-			"--js-runtimes", "node",
-			"--remote-components", "ejs:github",
-			"--no-warnings",
-			"--http-chunk-size", "10M",
-			"--concurrent-fragments", "16",
-			"--match-filter", "duration <= 900",
-			"-f", "18/22/best[height<=720][ext=mp4]/best[ext=mp4]/bv*[height<=720]+ba/b",
-			"--merge-output-format", "mp4",
-			"--max-filesize", "48M",
-			"--no-playlist",
-			"-o", outTemplate,
-			"--print", "after_move:filepath",
-			videoURL,
-		)
+		args = append(args, "--extractor-args", "youtube:player_client=visionos")
 	}
 
+	if format == "audio" {
+		args = append(args, "-f", "140/ba[abr>=120][ext=m4a]/ba[ext=m4a]/ba")
+	} else {
+		args = append(args, "-f", "18/22/best[height<=720][ext=mp4]/best[ext=mp4]/bv*[height<=720]+ba/b", "--merge-output-format", "mp4")
+	}
+	args = append(args, videoURL)
+
 	cmd := exec.CommandContext(ctx, d.cmdName, args...)
-	out, err := cmd.CombinedOutput()
+	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		call.err = fmt.Errorf("yt-dlp failed: %v | logs: %s", err, string(out))
+		call.err = err
+		return "", err
+	}
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		call.err = err
+		return "", err
+	}
+
+	progressRe := regexp.MustCompile(`\[download\]\s+(\d+(?:\.\d+)?)%`)
+	scanner := bufio.NewScanner(stdoutPipe)
+	var lastLine string
+	var lastProg int
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			lastLine = trimmed
+		}
+		if matches := progressRe.FindStringSubmatch(line); len(matches) > 1 {
+			if p, err := strconv.ParseFloat(matches[1], 64); err == nil {
+				intP := int(p)
+				if intP > lastProg && onProgress != nil {
+					lastProg = intP
+					onProgress(intP)
+				}
+			}
+		}
+	}
+
+	if err := cmd.Wait(); err != nil {
+		call.err = fmt.Errorf("yt-dlp failed: %v", err)
 		return "", call.err
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	resolvedPath := strings.TrimSpace(lines[len(lines)-1])
-
-	if resolvedPath == "" {
+	resolvedPath := lastLine
+	if resolvedPath == "" || strings.HasPrefix(resolvedPath, "[") {
 		if matches, gErr := filepath.Glob(globPattern); gErr == nil && len(matches) > 0 {
 			resolvedPath = matches[0]
 		}
