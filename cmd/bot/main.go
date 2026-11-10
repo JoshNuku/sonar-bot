@@ -14,6 +14,7 @@ import (
 	"sonar/internal/config"
 	"sonar/internal/database"
 	"sonar/internal/media"
+	"sonar/internal/music"
 	"sonar/internal/payment"
 )
 
@@ -36,6 +37,7 @@ func main() {
 
 	groq := ai.NewGroqClient(cfg.GroqAPIKey, cfg.GroqModel)
 	dl := media.NewDownloader(3) // 3 concurrent downloads
+	deezer := music.NewDeezerClient()
 	ps := payment.NewPaystackService(
 		cfg.PaystackSecret,
 		cfg.PaystackCurrency,
@@ -44,7 +46,7 @@ func main() {
 		cfg.TierMonthlyPrice,
 	)
 
-	controller := bot.NewBotController(tgBot, db, groq, dl, ps, cfg.NtfyURL)
+	controller := bot.NewBotController(tgBot, db, groq, dl, ps, deezer, cfg.NtfyURL)
 	go controller.StartPaymentWatcher()
 
 	// Auxiliary HTTP Handlers

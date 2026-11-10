@@ -20,6 +20,7 @@ import (
 	"sonar/internal/ai"
 	"sonar/internal/database"
 	"sonar/internal/media"
+	"sonar/internal/music"
 	"sonar/internal/payment"
 )
 
@@ -29,6 +30,7 @@ type BotController struct {
 	groq     *ai.GroqClient
 	dl       *media.Downloader
 	paystack *payment.PaystackService
+	deezer   *music.DeezerClient
 	notifier *Notifier
 	chatMu   sync.Mutex
 	chatMem  map[int64][]ai.ChatTurn
@@ -40,6 +42,7 @@ func NewBotController(
 	groq *ai.GroqClient,
 	dl *media.Downloader,
 	ps *payment.PaystackService,
+	deezer *music.DeezerClient,
 	ntfyURL string,
 ) *BotController {
 	return &BotController{
@@ -48,6 +51,7 @@ func NewBotController(
 		groq:     groq,
 		dl:       dl,
 		paystack: ps,
+		deezer:   deezer,
 		notifier: NewNotifier(ntfyURL),
 		chatMem:  make(map[int64][]ai.ChatTurn),
 	}
@@ -262,7 +266,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	text := strings.TrimSpace(msg.Text)
 
 	if strings.HasPrefix(text, "/start") || strings.HasPrefix(text, "/help") {
-		welcome := "🎧 **Welcome to Sonar!**\n\nSend me any song title, artist, or video name (e.g. `First Person Shooter`) and I'll fetch the high-quality **M4A Audio** or **720p Video** for you.\n\n💡 *Tip: Ask me for recommendations anytime—I learn your music taste from what you download!*\n\n`/terms`"
+		welcome := "🎧 **Welcome to Sonar!**\n\nSend me any song title, artist, or video name (e.g. `First Person Shooter`) and I'll fetch the high-quality **M4A Audio** or **720p Video** for you.\n\n💡 *Tip: Type /trending to see top charting songs right now, or ask me for recommendations anytime!*\n\n`/terms`"
 		reply := tgbotapi.NewMessage(chatID, welcome)
 		reply.ParseMode = "Markdown"
 		b.bot.Send(reply)
@@ -285,6 +289,31 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
+
+	// Direct Deezer Live Chart Lookup for trending queries
+	lowerText := strings.ToLower(text)
+	if strings.HasPrefix(lowerText, "/trending") || lowerText == "trending" || lowerText == "what's trending" || lowerText == "trending songs" || lowerText == "top songs" || lowerText == "charts" {
+		tracks, err := b.deezer.GetTopTrending(ctx, 5)
+		if err == nil && len(tracks) > 0 {
+			var sb strings.Builder
+			sb.WriteString("🔥 **Top Trending Songs (Global Deezer Chart):**\n\n")
+			var rows [][]tgbotapi.InlineKeyboardButton
+			for i, t := range tracks {
+				sb.WriteString(fmt.Sprintf("%d. **%s** — %s\n", i+1, t.Artist, t.Title))
+				songLabel := fmt.Sprintf("%s - %s", t.Artist, t.Title)
+				cbData := fmt.Sprintf("search:%s", truncateButtonLabel(songLabel, 54))
+				rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData(truncateButtonLabel("🎧 "+songLabel, 58), cbData),
+				))
+			}
+			sb.WriteString("\nTap any track below to fetch audio or video:")
+			reply := tgbotapi.NewMessage(chatID, sb.String())
+			reply.ParseMode = "Markdown"
+			reply.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
+			b.bot.Send(reply)
+			return
+		}
+	}
 
 	// Show native Telegram typing status while evaluating
 	b.bot.Send(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping))
@@ -334,6 +363,13 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 		b.recordChatTurn(chatID, text, parsed.Reply)
 		reply := tgbotapi.NewMessage(chatID, parsed.Reply)
 		reply.ParseMode = "Markdown"
+
+		if len(parsed.Suggestions) > 0 {
+			// Validate suggestions with Deezer to guarantee real, released tracks
+			if validated := b.deezer.ValidateSuggestions(ctx, parsed.Suggestions); len(validated) > 0 {
+				parsed.Suggestions = validated
+			}
+		}
 
 		if len(parsed.Suggestions) > 3 {
 			parsed.Suggestions = parsed.Suggestions[:3]
