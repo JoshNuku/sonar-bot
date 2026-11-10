@@ -11,17 +11,21 @@ import (
 
 type Notifier struct {
 	ntfyURL      string
-	cooldown     time.Duration
+	chatCooldown time.Duration
+	dlCooldown   time.Duration
 	mu           sync.Mutex
-	lastNotified map[int64]time.Time
+	lastChat     map[int64]time.Time
+	lastDownload map[int64]time.Time
 	client       *http.Client
 }
 
 func NewNotifier(ntfyURL string) *Notifier {
 	return &Notifier{
 		ntfyURL:      strings.TrimSpace(ntfyURL),
-		cooldown:     15 * time.Second, // Debounce rapid spam per user
-		lastNotified: make(map[int64]time.Time),
+		chatCooldown: 30 * time.Minute, // Silent session alert once every 30 minutes per user
+		dlCooldown:   1 * time.Minute,  // Debounce consecutive rapid downloads from same user
+		lastChat:     make(map[int64]time.Time),
+		lastDownload: make(map[int64]time.Time),
 		client:       &http.Client{Timeout: 8 * time.Second},
 	}
 }
@@ -64,7 +68,7 @@ func (n *Notifier) send(title, body, priority, tags string) {
 		if resp.StatusCode >= 300 {
 			log.Printf("[ntfy] unexpected response from %s: %d", n.ntfyURL, resp.StatusCode)
 		} else {
-			log.Printf("[ntfy] notification sent successfully: %s", title)
+			log.Printf("[ntfy] notification sent successfully (%s): %s", priority, title)
 		}
 	}()
 }
@@ -74,33 +78,47 @@ func (n *Notifier) NotifyStartup() {
 	n.send("Sonar Bot Online", "🚀 Sonar instance started and ready on Render.", "high", "white_check_mark,rocket")
 }
 
-// NotifyUserActivity sends an alert when a user sends a query or chat message.
+// NotifyUserActivity sends a completely silent activity log ping once per 30-minute user session (no sound, no vibrate).
 func (n *Notifier) NotifyUserActivity(chatID int64, username, query string) {
 	if n == nil || n.ntfyURL == "" {
 		return
 	}
 
 	n.mu.Lock()
-	last, exists := n.lastNotified[chatID]
-	if exists && time.Since(last) < n.cooldown {
+	last, exists := n.lastChat[chatID]
+	if exists && time.Since(last) < n.chatCooldown {
 		n.mu.Unlock()
 		return
 	}
-	n.lastNotified[chatID] = time.Now()
+	n.lastChat[chatID] = time.Now()
 	n.mu.Unlock()
 
-	body := fmt.Sprintf("%s is using Sonar (Query: %q)", formatUserTag(chatID, username), query)
-	n.send("Sonar Bot Active", body, "default", "headphones")
+	body := fmt.Sprintf("%s active on Sonar (Query: %q)", formatUserTag(chatID, username), query)
+	// Priority "low" is completely silent in ntfy (no sound, no vibration)
+	n.send("Sonar User Active", body, "low", "speech_balloon")
 }
 
-// NotifyDownload sends an alert when a user initiates a media download.
+// NotifyDownload sends a normal alert when a user initiates a media download (debounced 1 min).
 func (n *Notifier) NotifyDownload(chatID int64, username, trackTitle, format string) {
+	if n == nil || n.ntfyURL == "" {
+		return
+	}
+
+	n.mu.Lock()
+	last, exists := n.lastDownload[chatID]
+	if exists && time.Since(last) < n.dlCooldown {
+		n.mu.Unlock()
+		return
+	}
+	n.lastDownload[chatID] = time.Now()
+	n.mu.Unlock()
+
 	body := fmt.Sprintf("%s downloading %s: %q", formatUserTag(chatID, username), strings.ToUpper(format), trackTitle)
 	n.send("Sonar Download Started", body, "default", "inbox_tray,musical_note")
 }
 
 // NotifyPayment always sends an immediate high-priority notification when a pass is purchased.
 func (n *Notifier) NotifyPayment(chatID int64, planLabel, currency, amountStr string) {
-	body := fmt.Sprintf("Chat %d activated %s (%s %s)", chatID, planLabel, currency, amountStr)
-	n.send("Sonar Pass Purchased!", body, "high", "moneybag,tada")
+	body := fmt.Sprintf("🎉 Chat %d activated %s (%s %s)", chatID, planLabel, currency, amountStr)
+	n.send("💰 Sonar Pass Purchased!", body, "high", "moneybag,tada")
 }
