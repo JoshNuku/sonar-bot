@@ -12,6 +12,7 @@ import (
 	"sonar/internal/ai"
 	"sonar/internal/bot"
 	"sonar/internal/config"
+	"sonar/internal/dashboard"
 	"sonar/internal/database"
 	"sonar/internal/media"
 	"sonar/internal/music"
@@ -49,6 +50,10 @@ func main() {
 	controller := bot.NewBotController(tgBot, db, groq, dl, ps, deezer, cfg.NtfyURL)
 	controller.NotifyStartup()
 	go controller.StartPaymentWatcher()
+
+	// Register Admin Dashboard
+	adminServer := dashboard.NewServer(db, cfg.AdminPassword, cfg.TelegramBotToken)
+	adminServer.RegisterRoutes(http.DefaultServeMux)
 
 	// Auxiliary HTTP Handlers
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

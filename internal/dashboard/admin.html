@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sonar Bot — Admin Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090D16;
+      --card-bg: #111827;
+      --card-border: #1F2937;
+      --card-hover: #172033;
+      --text: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --primary: #06B6D4;
+      --primary-hover: #0891B2;
+      --accent: #8B5CF6;
+      --success: #10B981;
+      --danger: #EF4444;
+      --warning: #F59E0B;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .container { max-width: 1200px; margin: 0 auto; width: 100%; padding: 24px; }
+    
+    /* Header */
+    header {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 20px; }
+    .badge-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      padding: 4px 10px;
+      border-radius: 9999px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .pulse-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); }
+    
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+    button {
+      cursor: pointer;
+      font-family: inherit;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #000;
+      border: none;
+      padding: 8px 16px;
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary {
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      padding: 8px 14px;
+    }
+    .btn-secondary:hover { background: var(--card-hover); }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 8px 14px;
+    }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+
+    /* Login Card */
+    #loginView {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 80vh;
+      padding: 24px;
+    }
+    .login-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 36px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-muted); }
+    .form-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus { border-color: var(--primary); }
+
+    /* KPIs */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      opacity: 0.8;
+    }
+    .kpi-title { font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+    .kpi-value { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); }
+
+    /* Analytics Grid */
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    @media(max-width: 768px) {
+      .analytics-grid { grid-template-columns: 1fr; }
+    }
+    .analytics-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Leaderboard items */
+    .leader-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .leader-item:last-child { border-bottom: none; }
+    .leader-name { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; }
+    .rank-num {
+      width: 24px;
+      height: 24px;
+      background: var(--card-hover);
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 12px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 6px;
+    }
+    .tab-btn.active {
+      background: var(--card-bg);
+      color: var(--primary);
+      border: 1px solid var(--card-border);
+    }
+
+    /* Tables */
+    .table-container {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+    th {
+      background: rgba(0,0,0,0.2);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: var(--text);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.015); }
+
+    .tag-pill {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .pill-free { background: rgba(156, 163, 175, 0.15); color: #9CA3AF; }
+    .pill-pass { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .pill-format { background: rgba(6, 182, 212, 0.15); color: var(--primary); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .modal-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.7);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span>🎧</span>
+        <span>Sonar Admin</span>
+        <span class="badge-live"><span class="pulse-dot"></span> Live</span>
+      </div>
+      <div class="header-actions" id="navActions" style="display: none;">
+        <button class="btn-secondary" onclick="fetchData()">🔄 Refresh</button>
+        <button class="btn-primary" onclick="openGrantModal()">⚡ Grant Pass</button>
+        <button class="btn-danger" onclick="logout()">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Login View -->
+  <div id="loginView">
+    <div class="login-box">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="font-size: 40px; margin-bottom: 10px;">🎧</div>
+        <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Sonar Control Center</h2>
+        <p style="font-size: 13px; color: var(--text-muted);">Enter your admin password to view analytics</p>
+      </div>
+      <form onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Admin Password</label>
+          <input type="password" id="adminPassword" class="form-input" placeholder="••••••••" required autofocus>
+        </div>
+        <div id="loginError" style="color: var(--danger); font-size: 13px; margin-bottom: 14px; display: none;"></div>
+        <button type="submit" class="btn-primary" style="width: 100%; padding: 12px;">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard Main View -->
+  <main id="dashboardView" style="display: none;" class="container">
+    
+    <!-- KPI Row -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-title">TOTAL REGISTERED USERS</div>
+        <div class="kpi-value" id="kpiUsers">0</div>
+        <div class="kpi-sub" id="kpiActiveToday">0 active today</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">ACTIVE PASSES</div>
+        <div class="kpi-value" id="kpiPasses" style="color: var(--success);">0</div>
+        <div class="kpi-sub">Unlimited downloads active</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">DOWNLOADS TODAY</div>
+        <div class="kpi-value" id="kpiDownloads">0</div>
+        <div class="kpi-sub" id="kpiTotalCached">0 cached tracks in cloud</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">TOTAL REVENUE (PAYSTACK)</div>
+        <div class="kpi-value" id="kpiRevenue" style="color: var(--primary);">GHS 0.00</div>
+        <div class="kpi-sub">Mobile Money volume</div>
+      </div>
+    </div>
+
+    <!-- Analytics Section -->
+    <div class="analytics-grid">
+      <!-- Top Downloaded Songs -->
+      <div class="analytics-card">
+        <div class="card-title">
+          <span>🔥 Most Downloaded Tracks</span>
+        </div>
+        <div id="topSongsList">Loading...</div>
+      </div>
+
+      <!-- Format Breakdown -->
+      <div class="analytics-card">
+        <div class="card-title">
+          <span>📊 Media Format Distribution</span>
+        </div>
+        <div id="formatStatsList">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('usersTab', this)">👥 All Users</button>
+      <button class="tab-btn" onclick="switchTab('downloadsTab', this)">📥 Recent Downloads</button>
+      <button class="tab-btn" onclick="switchTab('paymentsTab', this)">💳 MoMo Payments</button>
+    </div>
+
+    <!-- Users Table Tab -->
+    <div id="usersTab" class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Telegram User</th>
+            <th>Chat ID</th>
+            <th>Pass Status</th>
+            <th>Downloads Today</th>
+            <th>Recent Tracks</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Recent Downloads Tab -->
+    <div id="downloadsTab" class="table-container" style="display: none;">
+      <table>
+        <thead>
+          <tr>
+            <th>Track Title</th>
+            <th>Format</th>
+            <th>YouTube ID</th>
+            <th>Downloaded At</th>
+          </tr>
+        </thead>
+        <tbody id="downloadsTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Payments Tab -->
+    <div id="paymentsTab" class="table-container" style="display: none;">
+      <table>
+        <thead>
+          <tr>
+            <th>Reference</th>
+            <th>Chat ID</th>
+            <th>Plan Tier</th>
+            <th>Amount</th>
+            <th>Processed At</th>
+          </tr>
+        </thead>
+        <tbody id="paymentsTableBody"></tbody>
+      </table>
+    </div>
+
+  </main>
+
+  <!-- Grant Pass Modal -->
+  <div class="modal-overlay" id="grantModal">
+    <div class="modal-box">
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 6px;">⚡ Grant Unlimited Pass</h3>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Instantly grant a user free unlimited downloads.</p>
+      <form onsubmit="handleGrantPass(event)">
+        <div class="form-group">
+          <label class="form-label">Telegram Chat ID</label>
+          <input type="number" id="grantChatID" class="form-input" placeholder="e.g. 2081516511" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Duration</label>
+          <select id="grantDuration" class="form-input" style="cursor: pointer;">
+            <option value="24">⚡ Day Pass (24 Hours)</option>
+            <option value="168">🔥 Weekly Pass (7 Days)</option>
+            <option value="720">👑 Monthly Pass (30 Days)</option>
+          </select>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn-secondary" onclick="closeGrantModal()">Cancel</button>
+          <button type="submit" class="btn-primary">Grant Access</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    async function checkAuth() {
+      try {
+        const res = await fetch('/admin/api/data');
+        if (res.ok) {
+          showDashboard();
+          const data = await res.json();
+          renderDashboard(data);
+        } else {
+          showLogin();
+        }
+      } catch (e) {
+        showLogin();
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const pw = document.getElementById('adminPassword').value;
+      const errEl = document.getElementById('loginError');
+      errEl.style.display = 'none';
+
+      try {
+        const res = await fetch('/admin/api/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({password: pw})
+        });
+        const json = await res.json();
+        if (json.ok) {
+          showDashboard();
+          fetchData();
+        } else {
+          errEl.textContent = json.error || 'Invalid admin password';
+          errEl.style.display = 'block';
+        }
+      } catch (err) {
+        errEl.textContent = 'Connection error. Try again.';
+        errEl.style.display = 'block';
+      }
+    }
+
+    async function logout() {
+      await fetch('/admin/api/logout', {method: 'POST'});
+      showLogin();
+    }
+
+    function showDashboard() {
+      document.getElementById('loginView').style.display = 'none';
+      document.getElementById('dashboardView').style.display = 'block';
+      document.getElementById('navActions').style.display = 'flex';
+    }
+
+    function showLogin() {
+      document.getElementById('loginView').style.display = 'flex';
+      document.getElementById('dashboardView').style.display = 'none';
+      document.getElementById('navActions').style.display = 'none';
+    }
+
+    async function fetchData() {
+      try {
+        const res = await fetch('/admin/api/data');
+        if (res.status === 401) {
+          showLogin();
+          return;
+        }
+        const data = await res.json();
+        renderDashboard(data);
+      } catch (e) {
+        console.error('Fetch error:', e);
+      }
+    }
+
+    function renderDashboard(data) {
+      // KPIs
+      document.getElementById('kpiUsers').textContent = data.kpis.total_users;
+      document.getElementById('kpiActiveToday').textContent = data.kpis.active_today + ' active today';
+      document.getElementById('kpiPasses').textContent = data.kpis.active_passes_count;
+      document.getElementById('kpiDownloads').textContent = data.kpis.downloads_today;
+      document.getElementById('kpiTotalCached').textContent = data.kpis.total_cached_tracks + ' cached media files';
+      
+      const revGhs = (data.kpis.total_revenue_cents / 100).toFixed(2);
+      document.getElementById('kpiRevenue').textContent = 'GHS ' + revGhs;
+
+      // Top Songs
+      const topEl = document.getElementById('topSongsList');
+      if (data.top_songs && data.top_songs.length > 0) {
+        topEl.innerHTML = data.top_songs.map(function(s, idx) {
+          return '<div class="leader-item">' +
+            '<div class="leader-name">' +
+              '<span class="rank-num">' + (idx + 1) + '</span>' +
+              '<span>' + escapeHtml(s.title) + '</span>' +
+            '</div>' +
+            '<span class="tag-pill pill-format">' + s.count + ' downloads</span>' +
+          '</div>';
+        }).join('');
+      } else {
+        topEl.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No downloads recorded yet.</div>';
+      }
+
+      // Format Distribution
+      const fmtEl = document.getElementById('formatStatsList');
+      if (data.format_stats && data.format_stats.length > 0) {
+        fmtEl.innerHTML = data.format_stats.map(function(f) {
+          const label = f.format.indexOf('audio') !== -1 ? '🎵 Audio (M4A)' : '🎬 Video (720p)';
+          return '<div class="leader-item">' +
+            '<div class="leader-name"><span>' + label + '</span></div>' +
+            '<span class="tag-pill pill-format">' + f.count + ' items</span>' +
+          '</div>';
+        }).join('');
+      } else {
+        fmtEl.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No media formatted yet.</div>';
+      }
+
+      // Users Table
+      const uTbody = document.getElementById('usersTableBody');
+      uTbody.innerHTML = data.users.map(function(u) {
+        let passBadge = '<span class="tag-pill pill-free">Free (5/day)</span>';
+        if (u.is_premium) {
+          const dateStr = u.premium_until ? new Date(u.premium_until).toLocaleDateString() : 'Active';
+          passBadge = '<span class="tag-pill pill-pass">⚡ Pass (' + dateStr + ')</span>';
+        }
+        const userLink = u.username ? '<a href="https://t.me/' + u.username + '" target="_blank" style="color: var(--primary); text-decoration: none;">@' + u.username + '</a>' : '<span style="color: var(--text-muted);">(No username)</span>';
+        const recentStr = (u.recent_songs && u.recent_songs.length > 0) ? u.recent_songs.slice(0, 2).map(escapeHtml).join(' • ') : '<span style="color: var(--text-muted);">None</span>';
+
+        return '<tr>' +
+          '<td><b>' + userLink + '</b></td>' +
+          '<td><code>' + u.chat_id + '</code></td>' +
+          '<td>' + passBadge + '</td>' +
+          '<td><b>' + u.daily_downloads + '</b></td>' +
+          '<td style="font-size: 12px;">' + recentStr + '</td>' +
+          '<td><button class="btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="quickGrant(' + u.chat_id + ')">⚡ Grant</button></td>' +
+        '</tr>';
+      }).join('');
+
+      // Downloads Table
+      const dTbody = document.getElementById('downloadsTableBody');
+      dTbody.innerHTML = data.recent_downloads.map(function(d) {
+        return '<tr>' +
+          '<td><b>' + escapeHtml(d.title) + '</b></td>' +
+          '<td><span class="tag-pill pill-format">' + escapeHtml(d.media_format) + '</span></td>' +
+          '<td><a href="https://youtu.be/' + d.youtube_id + '" target="_blank" style="color: var(--primary); text-decoration: none;">' + d.youtube_id + '</a></td>' +
+          '<td style="color: var(--text-muted); font-size: 13px;">' + new Date(d.created_at).toLocaleString() + '</td>' +
+        '</tr>';
+      }).join('');
+
+      // Payments Table
+      const pTbody = document.getElementById('paymentsTableBody');
+      pTbody.innerHTML = data.recent_payments.map(function(p) {
+        const amt = (p.amount_cents / 100).toFixed(2);
+        return '<tr>' +
+          '<td><code>' + escapeHtml(p.reference) + '</code></td>' +
+          '<td><code>' + p.chat_id + '</code></td>' +
+          '<td><span class="tag-pill pill-pass">' + escapeHtml(p.plan_tier || 'Pass') + '</span></td>' +
+          '<td><b>GHS ' + amt + '</b></td>' +
+          '<td style="color: var(--text-muted); font-size: 13px;">' + new Date(p.processed_at).toLocaleString() + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      ['usersTab', 'downloadsTab', 'paymentsTab'].forEach(function(id) {
+        document.getElementById(id).style.display = (id === tabId) ? 'block' : 'none';
+      });
+    }
+
+    function openGrantModal() {
+      document.getElementById('grantModal').style.display = 'flex';
+    }
+    function closeGrantModal() {
+      document.getElementById('grantModal').style.display = 'none';
+    }
+    function quickGrant(chatId) {
+      document.getElementById('grantChatID').value = chatId;
+      openGrantModal();
+    }
+
+    async function handleGrantPass(e) {
+      e.preventDefault();
+      const chatId = parseInt(document.getElementById('grantChatID').value);
+      const hours = parseInt(document.getElementById('grantDuration').value);
+      try {
+        const res = await fetch('/admin/api/grant-pass', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({chat_id: chatId, hours: hours})
+        });
+        const json = await res.json();
+        if (json.ok) {
+          alert('Pass granted successfully!');
+          closeGrantModal();
+          fetchData();
+        } else {
+          alert('Error: ' + json.error);
+        }
+      } catch (err) {
+        alert('Failed to grant pass.');
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Auto-refresh every 12 seconds when dashboard is open
+    setInterval(function() {
+      if (document.getElementById('dashboardView').style.display === 'block') {
+        fetchData();
+      }
+    }, 12000);
+
+    // Initial load
+    checkAuth();
+  </script>
+</body>
+</html>
