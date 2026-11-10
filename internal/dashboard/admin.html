@@ -878,7 +878,14 @@
 
     <!-- Navigation Tabs -->
     <div class="nav-tabs">
-      <button class="tab-item active" onclick="switchTab('usersTab', this)">
+      <button class="tab-item active" onclick="switchTab('sessionsTab', this)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span>Live Sessions</span>
+      </button>
+      <button class="tab-item" onclick="switchTab('usersTab', this)">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>
         </svg>
@@ -904,8 +911,23 @@
       </button>
     </div>
 
+    <!-- Live Sessions Tab -->
+    <div id="sessionsTab" class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Type</th>
+            <th>Activity Details</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="sessionsTableBody"></tbody>
+      </table>
+    </div>
+
     <!-- Users Table Tab -->
-    <div id="usersTab" class="table-wrapper">
+    <div id="usersTab" class="table-wrapper" style="display: none;">
       <table>
         <thead>
           <tr>
@@ -1240,6 +1262,48 @@
         '</tr>';
       }).join('');
 
+      // Sessions Table
+      const sTbody = document.getElementById('sessionsTableBody');
+      if (sTbody) {
+        if (data.recent_sessions && data.recent_sessions.length > 0) {
+          sTbody.innerHTML = data.recent_sessions.map(function(s) {
+            const userLink = s.username
+              ? '<a href="https://t.me/' + s.username + '" target="_blank" class="ext-link" style="color: var(--text); font-weight: 500;">@' + s.username + ' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg></a>'
+              : '<span class="mono-cell">' + s.chat_id + '</span>';
+
+            let typeBadge = '<span class="badge badge-subtle">' + escapeHtml(s.session_type) + '</span>';
+            if (s.session_type === 'download') {
+              typeBadge = '<span class="badge badge-pass">' +
+                '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> ' +
+                'download</span>';
+            } else if (s.session_type === 'youtube') {
+              typeBadge = '<span class="badge badge-subtle" style="border-color: rgba(239,68,68,0.4); color: var(--danger);">' +
+                '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> ' +
+                'youtube</span>';
+            } else if (s.session_type === 'search') {
+              typeBadge = '<span class="badge badge-subtle">' +
+                '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> ' +
+                'search</span>';
+            } else if (s.session_type === 'chat') {
+              typeBadge = '<span class="badge badge-subtle" style="color: #a78bfa; border-color: rgba(167,139,250,0.3);">' +
+                '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ' +
+                'chat</span>';
+            } else if (s.session_type.indexOf('payment') !== -1) {
+              typeBadge = '<span class="badge badge-pass">payment</span>';
+            }
+
+            return '<tr>' +
+              '<td>' + userLink + '</td>' +
+              '<td>' + typeBadge + '</td>' +
+              '<td style="max-width: 440px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px;">' + escapeHtml(s.details) + '</td>' +
+              '<td><span class="mono-cell">' + formatRelativeTime(s.created_at) + '</span></td>' +
+            '</tr>';
+          }).join('');
+        } else {
+          sTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No active sessions logged yet. User activity appears here in real time.</td></tr>';
+        }
+      }
+
       // Twitter Status Badge
       const twBadge = document.getElementById('twitterStatusBadge');
       if (twBadge) {
@@ -1254,10 +1318,20 @@
     function switchTab(tabId, btn) {
       document.querySelectorAll('.tab-item').forEach(function(b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      ['usersTab', 'downloadsTab', 'paymentsTab', 'twitterTab'].forEach(function(id) {
+      ['sessionsTab', 'usersTab', 'downloadsTab', 'paymentsTab', 'twitterTab'].forEach(function(id) {
         const el = document.getElementById(id);
         if (el) el.style.display = (id === tabId) ? 'block' : 'none';
       });
+    }
+
+    function formatRelativeTime(isoStr) {
+      if (!isoStr) return '-';
+      const date = new Date(isoStr);
+      const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+      if (diffSec < 45) return 'Just now';
+      if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm ago';
+      if (diffSec < 86400) return Math.floor(diffSec / 3600) + 'h ago';
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     }
 
     function updateTweetCounter() {

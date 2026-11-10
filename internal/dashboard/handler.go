@@ -163,6 +163,7 @@ func (s *Server) handleData(w http.ResponseWriter, r *http.Request) {
 		"recent_payments":    data.RecentPayments,
 		"format_stats":       data.FormatStats,
 		"top_songs":          data.TopSongs,
+		"recent_sessions":    data.RecentSessions,
 		"twitter_configured": isTwitterConfigured,
 	}
 

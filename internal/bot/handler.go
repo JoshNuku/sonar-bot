@@ -80,6 +80,14 @@ func (b *BotController) recordChatTurn(chatID int64, userMsg, assistantMsg strin
 	b.chatMem[chatID] = turns
 }
 
+func (b *BotController) recordSession(chatID int64, username, sessionType, details string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		b.db.RecordSession(ctx, chatID, username, sessionType, details)
+	}()
+}
+
 var youtubeURLRegex = regexp.MustCompile(`(?i)(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([\w-]{11})`)
 
 func extractYouTubeVideoID(text string) string {
@@ -259,6 +267,7 @@ func (b *BotController) activateVerifiedTransaction(ctx context.Context, chatID 
 	reply.ParseMode = "Markdown"
 	b.bot.Send(reply)
 	b.notifier.NotifyPayment(targetChatID, plan.Label, b.paystack.Currency(), payment.FormatSubunits(paidAmount))
+	b.recordSession(targetChatID, "", "payment", fmt.Sprintf("Pass activated: %s (%s)", plan.Label, payment.FormatSubunits(paidAmount)))
 	return true
 }
 
@@ -360,6 +369,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	b.notifier.NotifyUserActivity(chatID, username, text)
 
 	if strings.HasPrefix(text, "/start") || strings.HasPrefix(text, "/help") {
+		b.recordSession(chatID, username, "command", "Started bot (/start)")
 		welcome := "🎧 **Welcome to Sonar!**\n\nDownload any **YouTube Video** or **Song** directly inside Telegram.\n\n• **Direct Link:** Paste any YouTube or Shorts link to download instantly\n• **Search:** Type any song title, creator, or video name (e.g. `First Person Shooter`, `MKBHD`, `Lo-fi beats`)\n• **Formats:** Clean **M4A Audio** or **720p Video**\n\n💡 *Tip: Type /trending to see top music charts, or /history to view recent downloads.*\n\n`/terms`"
 		reply := tgbotapi.NewMessage(chatID, welcome)
 		reply.ParseMode = "Markdown"
@@ -368,6 +378,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	}
 
 	if strings.HasPrefix(text, "/terms") {
+		b.recordSession(chatID, username, "command", "Viewed /terms")
 		legalText := "⚖️ **Sonar Terms of Use & DMCA Notice**\n\n" +
 			"1. **Nature of Service**: Sonar is an automated, user-directed AI discovery and ephemeral stream-indexing utility. Paid passes cover AI compute credits and cloud processing bandwidth only.\n" +
 			"2. **Zero Media Hosting**: Sonar does not host, store, or maintain any audio or video files on its servers. All temporary streams are purged immediately upon delivery.\n" +
@@ -384,6 +395,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 
 	// Direct YouTube Link Detection (e.g. youtube.com/watch?v=..., youtu.be/..., youtube.com/shorts/...)
 	if videoID := extractYouTubeVideoID(text); videoID != "" {
+		b.recordSession(chatID, username, "youtube", "Pasted YouTube link: "+truncateButtonLabel(text, 80))
 		allowed, _, _, quotaErr := b.db.CheckQuota(ctx, chatID, username)
 		if quotaErr != nil {
 			log.Printf("Quota error on youtube link: %v", quotaErr)
@@ -400,6 +412,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	// Direct Deezer Live Chart Lookup for trending queries
 	lowerText := strings.ToLower(text)
 	if strings.HasPrefix(lowerText, "/trending") || lowerText == "trending" || lowerText == "what's trending" || lowerText == "trending songs" || lowerText == "top songs" || lowerText == "charts" {
+		b.recordSession(chatID, username, "trending", "Viewed trending music chart")
 		tracks, err := b.deezer.GetTopTrending(ctx, 5)
 		if err == nil && len(tracks) > 0 {
 			var sb strings.Builder
@@ -428,6 +441,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	allowed, _, recentSongs, quotaErr := b.db.CheckQuota(ctx, chatID, username)
 
 	if strings.HasPrefix(text, "/history") {
+		b.recordSession(chatID, username, "history", "Viewed personal download history")
 		if len(recentSongs) == 0 {
 			b.bot.Send(tgbotapi.NewMessage(chatID, "🎶 You haven't downloaded any tracks yet. Send a song title like `First Person Shooter` to get started!"))
 			return
@@ -467,6 +481,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 
 	// Conversational AI reply if the user is chatting or asking for recommendations (does not consume download quota)
 	if !parsed.IsSongQuery {
+		b.recordSession(chatID, username, "chat", "Asked AI: "+truncateButtonLabel(text, 80))
 		b.recordChatTurn(chatID, text, parsed.Reply)
 		reply := tgbotapi.NewMessage(chatID, parsed.Reply)
 		reply.ParseMode = "Markdown"
@@ -513,6 +528,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	}
 
 	query := parsed.SearchTerm
+	b.recordSession(chatID, username, "search", "Searched: "+truncateButtonLabel(query, 80))
 	b.recordChatTurn(chatID, text, "Searched YouTube for: "+query)
 	tracks, err := b.dl.ResolveTracks(ctx, query, 5)
 	if err != nil || len(tracks) == 0 {
@@ -579,6 +595,7 @@ func (b *BotController) presentDirectVideoOptions(ctx context.Context, chatID in
 	}
 	b.dl.RememberTrack(media.TrackInfo{ID: videoID, Title: trackTitle})
 	b.db.RecordUserSong(ctx, chatID, trackTitle)
+	b.recordSession(chatID, username, "youtube", "Resolved video: "+truncateButtonLabel(trackTitle, 80))
 
 	_, remaining, _, _ := b.db.CheckQuota(ctx, chatID, username)
 
@@ -671,6 +688,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 		_, remaining, _, _ := b.db.CheckQuota(ctx, chatID, cb.From.UserName)
 		trackTitle := extractTrackTitle(cb.Message, videoID, b.dl)
 		b.db.RecordUserSong(ctx, chatID, trackTitle)
+		b.recordSession(chatID, cb.From.UserName, "select", "Selected track: "+truncateButtonLabel(trackTitle, 80))
 
 		kb := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
@@ -715,6 +733,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 			b.bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Unable to generate MoMo payment link. Try again soon."))
 			return
 		}
+		b.recordSession(chatID, cb.From.UserName, "checkout", "Initiated checkout for "+plan.Label)
 
 		// Automatically poll Paystack in the background so localhost testing & webhooks push the confirmation message automatically!
 		go b.pollPaymentStatus(chatID, reference)
@@ -741,6 +760,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 	}
 	trackTitle := extractTrackTitle(cb.Message, videoID, b.dl)
 	b.notifier.NotifyDownload(chatID, cb.From.UserName, trackTitle, format)
+	b.recordSession(chatID, cb.From.UserName, "download", fmt.Sprintf("Started %s: %s", format, truncateButtonLabel(trackTitle, 80)))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()

@@ -68,6 +68,16 @@ func (db *DB) EnsureSchema(ctx context.Context) error {
 		);`,
 		`ALTER TABLE media_cache DROP CONSTRAINT IF EXISTS media_cache_pkey;`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_media_cache_yt_fmt ON media_cache (youtube_id, media_format);`,
+		`CREATE TABLE IF NOT EXISTS user_sessions (
+			id BIGSERIAL PRIMARY KEY,
+			chat_id BIGINT NOT NULL,
+			username TEXT DEFAULT '',
+			session_type TEXT NOT NULL,
+			details TEXT NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_user_sessions_created_at ON user_sessions (created_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_user_sessions_chat_id ON user_sessions (chat_id);`,
 	}
 	for _, q := range queries {
 		if _, err := db.Pool.Exec(ctx, q); err != nil {
@@ -209,4 +219,16 @@ func (db *DB) ProcessPaymentSuccess(ctx context.Context, ref string, chatID int6
 	}
 
 	return expiresAt, nil
+}
+
+// RecordSession inserts an activity event into the user_sessions audit log.
+func (db *DB) RecordSession(ctx context.Context, chatID int64, username, sessionType, details string) {
+	if details == "" {
+		return
+	}
+	if len(details) > 300 {
+		details = details[:300]
+	}
+	query := `INSERT INTO user_sessions (chat_id, username, session_type, details) VALUES ($1, $2, $3, $4)`
+	_, _ = db.Pool.Exec(ctx, query, chatID, username, sessionType, details)
 }

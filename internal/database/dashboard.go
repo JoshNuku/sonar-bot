@@ -49,6 +49,15 @@ type TopSong struct {
 	Count int    `json:"count"`
 }
 
+type SessionRecord struct {
+	ID          int64     `json:"id"`
+	ChatID      int64     `json:"chat_id"`
+	Username    string    `json:"username"`
+	SessionType string    `json:"session_type"`
+	Details     string    `json:"details"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type DashboardData struct {
 	KPIs            DashboardKPIs    `json:"kpis"`
 	Users           []UserRecord     `json:"users"`
@@ -56,6 +65,7 @@ type DashboardData struct {
 	RecentPayments  []PaymentRecord  `json:"recent_payments"`
 	FormatStats     []FormatCount    `json:"format_stats"`
 	TopSongs        []TopSong        `json:"top_songs"`
+	RecentSessions  []SessionRecord  `json:"recent_sessions"`
 }
 
 // GetDashboardData aggregates users, downloads, payments, and stats for the admin UI.
@@ -66,6 +76,7 @@ func (db *DB) GetDashboardData(ctx context.Context) (*DashboardData, error) {
 		RecentPayments:  []PaymentRecord{},
 		FormatStats:     []FormatCount{},
 		TopSongs:        []TopSong{},
+		RecentSessions:  []SessionRecord{},
 	}
 
 	// 1. KPIs
@@ -159,6 +170,23 @@ func (db *DB) GetDashboardData(ctx context.Context) (*DashboardData, error) {
 			var ts TopSong
 			if err := tRows.Scan(&ts.Title, &ts.Count); err == nil {
 				data.TopSongs = append(data.TopSongs, ts)
+			}
+		}
+	}
+
+	// 7. Recent Sessions (latest 100)
+	sRows, err := db.Pool.Query(ctx, `
+		SELECT id, chat_id, COALESCE(username, ''), session_type, details, created_at
+		FROM user_sessions
+		ORDER BY created_at DESC
+		LIMIT 100
+	`)
+	if err == nil {
+		defer sRows.Close()
+		for sRows.Next() {
+			var s SessionRecord
+			if err := sRows.Scan(&s.ID, &s.ChatID, &s.Username, &s.SessionType, &s.Details, &s.CreatedAt); err == nil {
+				data.RecentSessions = append(data.RecentSessions, s)
 			}
 		}
 	}
