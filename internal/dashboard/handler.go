@@ -12,15 +12,19 @@ import (
 	"time"
 
 	"sonar/internal/database"
+	"sonar/internal/music"
+	"sonar/internal/twitter"
 )
 
 type Server struct {
 	db            *database.DB
 	adminPassword string
 	hmacSecret    []byte
+	twitter       *twitter.Client
+	deezer        *music.DeezerClient
 }
 
-func NewServer(db *database.DB, adminPassword, secretSalt string) *Server {
+func NewServer(db *database.DB, adminPassword, secretSalt string, tw *twitter.Client, dz *music.DeezerClient) *Server {
 	if adminPassword == "" {
 		adminPassword = "sonar2026"
 	}
@@ -29,6 +33,8 @@ func NewServer(db *database.DB, adminPassword, secretSalt string) *Server {
 		db:            db,
 		adminPassword: adminPassword,
 		hmacSecret:    hash[:],
+		twitter:       tw,
+		deezer:        dz,
 	}
 }
 
@@ -77,6 +83,8 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/api/logout", s.handleLogout)
 	mux.HandleFunc("/admin/api/data", s.handleData)
 	mux.HandleFunc("/admin/api/grant-pass", s.handleGrantPass)
+	mux.HandleFunc("/admin/api/twitter/tweet", s.handleTwitterTweet)
+	mux.HandleFunc("/admin/api/twitter/trending", s.handleTwitterTrending)
 }
 
 func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
@@ -146,8 +154,114 @@ func (s *Server) handleData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isTwitterConfigured := s.twitter != nil && s.twitter.IsConfigured()
+
+	resp := map[string]interface{}{
+		"kpis":               data.KPIs,
+		"users":              data.Users,
+		"recent_downloads":   data.RecentDownloads,
+		"recent_payments":    data.RecentPayments,
+		"format_stats":       data.FormatStats,
+		"top_songs":          data.TopSongs,
+		"twitter_configured": isTwitterConfigured,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleTwitterTweet(w http.ResponseWriter, r *http.Request) {
+	if !s.isAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.twitter == nil || !s.twitter.IsConfigured() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":    false,
+			"error": "Twitter API credentials are not set in .env",
+		})
+		return
+	}
+
+	var req struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Text) == "" {
+		http.Error(w, "Text is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.twitter.PostTweet(r.Context(), req.Text); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+}
+
+func (s *Server) handleTwitterTrending(w http.ResponseWriter, r *http.Request) {
+	if !s.isAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.twitter == nil || !s.twitter.IsConfigured() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":    false,
+			"error": "Twitter API credentials are not set in .env",
+		})
+		return
+	}
+
+	if s.deezer == nil {
+		http.Error(w, "Music provider unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	tracks, err := s.deezer.GetTopTrending(r.Context(), 5)
+	if err != nil || len(tracks) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":    false,
+			"error": "Failed to fetch trending tracks",
+		})
+		return
+	}
+
+	if err := s.twitter.PostTrendingDrop(r.Context(), tracks); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
 }
 
 func (s *Server) handleGrantPass(w http.ResponseWriter, r *http.Request) {
