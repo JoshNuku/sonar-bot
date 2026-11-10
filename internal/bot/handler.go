@@ -102,14 +102,22 @@ func downloadThumbnailBytes(ctx context.Context, videoID string) ([]byte, error)
 
 func cleanTitle(s string) string {
 	s = strings.TrimSpace(s)
-	s = strings.Trim(s, "*_`~")
-	s = strings.TrimPrefix(s, "🎧")
-	s = strings.TrimPrefix(s, "🎵")
-	s = strings.TrimPrefix(s, "🎬")
-	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "Found:")
-	s = strings.TrimSpace(s)
-	s = strings.Trim(s, "*_`~")
+	for {
+		orig := s
+		s = strings.Trim(s, "*_`~ \t\r\n")
+		s = strings.TrimPrefix(s, "🎧")
+		s = strings.TrimPrefix(s, "🎵")
+		s = strings.TrimPrefix(s, "🎬")
+		s = strings.TrimPrefix(s, "⚡")
+		s = strings.TrimPrefix(s, "Found:")
+		s = strings.TrimSpace(s)
+		if idx := strings.Index(strings.ToLower(s), "confirm your song for:"); idx != -1 {
+			s = strings.TrimSpace(s[idx+len("confirm your song for:"):])
+		}
+		if s == orig {
+			break
+		}
+	}
 	return strings.TrimSpace(s)
 }
 

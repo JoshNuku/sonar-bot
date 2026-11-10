@@ -181,3 +181,4 @@ func (db *DB) GrantManualPass(ctx context.Context, chatID int64, hours int) erro
 	_, err := db.Pool.Exec(ctx, query, chatID, expiresAt)
 	return err
 }
+
