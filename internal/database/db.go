@@ -58,6 +58,8 @@ func (db *DB) EnsureSchema(ctx context.Context) error {
 	queries := []string{
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ;`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS recent_songs TEXT[] DEFAULT '{}';`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ DEFAULT NOW();`,
+		`CREATE INDEX IF NOT EXISTS idx_users_last_seen_at ON users (last_seen_at DESC);`,
 		`ALTER TABLE processed_payments ADD COLUMN IF NOT EXISTS plan_tier TEXT;`,
 		`CREATE TABLE IF NOT EXISTS media_cache (
 			youtube_id TEXT NOT NULL,
@@ -105,14 +107,17 @@ func (db *DB) CheckQuota(ctx context.Context, chatID int64, username string) (bo
 	err := db.Pool.QueryRow(ctx, query, chatID).Scan(&dailyDownloads, &lastResetDate, &isPremium, &premiumUntil, &recentSongs)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		insert := `INSERT INTO users (chat_id, username, daily_downloads, last_reset_date, is_premium, recent_songs)
-		           VALUES ($1, $2, 0, $3, false, '{}')`
+		insert := `INSERT INTO users (chat_id, username, daily_downloads, last_reset_date, is_premium, recent_songs, last_seen_at)
+		           VALUES ($1, $2, 0, $3, false, '{}', NOW())`
 		_, err = db.Pool.Exec(ctx, insert, chatID, username, today)
 		return db.DailyFreeLimit > 0, db.DailyFreeLimit, nil, err
 	}
 	if err != nil {
 		return false, 0, nil, err
 	}
+
+	// Always update user's last login / activity timestamp
+	_, _ = db.Pool.Exec(ctx, `UPDATE users SET last_seen_at = NOW(), username = COALESCE(NULLIF($2, ''), username) WHERE chat_id = $1`, chatID, username)
 
 	if lastResetDate.Before(today) {
 		dailyDownloads = 0
@@ -231,4 +236,5 @@ func (db *DB) RecordSession(ctx context.Context, chatID int64, username, session
 	}
 	query := `INSERT INTO user_sessions (chat_id, username, session_type, details) VALUES ($1, $2, $3, $4)`
 	_, _ = db.Pool.Exec(ctx, query, chatID, username, sessionType, details)
+	_, _ = db.Pool.Exec(ctx, `UPDATE users SET last_seen_at = NOW() WHERE chat_id = $1`, chatID)
 }

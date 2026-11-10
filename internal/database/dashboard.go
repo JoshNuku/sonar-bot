@@ -22,6 +22,7 @@ type UserRecord struct {
 	IsPremium      bool       `json:"is_premium"`
 	PremiumUntil   *time.Time `json:"premium_until"`
 	RecentSongs    []string   `json:"recent_songs"`
+	LastLogin      time.Time  `json:"last_login"`
 }
 
 type DownloadRecord struct {
@@ -87,11 +88,19 @@ func (db *DB) GetDashboardData(ctx context.Context) (*DashboardData, error) {
 	_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(SUM(amount_cents), 0) FROM processed_payments`).Scan(&data.KPIs.TotalRevenueCents)
 	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE is_premium = true OR (premium_until IS NOT NULL AND premium_until > NOW())`).Scan(&data.KPIs.ActivePassesCount)
 
-	// 2. Users (latest 100)
+	// 2. Users (latest 100 sorted by last login / activity)
 	uRows, err := db.Pool.Query(ctx, `
-		SELECT chat_id, COALESCE(username, ''), daily_downloads, last_reset_date, is_premium, premium_until, COALESCE(recent_songs, '{}')
-		FROM users
-		ORDER BY last_reset_date DESC, chat_id DESC
+		SELECT 
+			u.chat_id, 
+			COALESCE(u.username, ''), 
+			u.daily_downloads, 
+			u.last_reset_date, 
+			u.is_premium, 
+			u.premium_until, 
+			COALESCE(u.recent_songs, '{}'),
+			COALESCE(u.last_seen_at, (SELECT MAX(s.created_at) FROM user_sessions s WHERE s.chat_id = u.chat_id), u.last_reset_date, NOW()) AS last_login
+		FROM users u
+		ORDER BY last_login DESC NULLS LAST, u.chat_id DESC
 		LIMIT 100
 	`)
 	if err == nil {
@@ -99,7 +108,7 @@ func (db *DB) GetDashboardData(ctx context.Context) (*DashboardData, error) {
 		for uRows.Next() {
 			var u UserRecord
 			var resetDate time.Time
-			if err := uRows.Scan(&u.ChatID, &u.Username, &u.DailyDownloads, &resetDate, &u.IsPremium, &u.PremiumUntil, &u.RecentSongs); err == nil {
+			if err := uRows.Scan(&u.ChatID, &u.Username, &u.DailyDownloads, &resetDate, &u.IsPremium, &u.PremiumUntil, &u.RecentSongs, &u.LastLogin); err == nil {
 				u.LastResetDate = resetDate.Format("2006-01-02")
 				data.Users = append(data.Users, u)
 			}

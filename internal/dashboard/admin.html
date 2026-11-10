@@ -934,6 +934,7 @@
             <th>User</th>
             <th>Chat ID</th>
             <th>Status</th>
+            <th>Last Active</th>
             <th>Usage Today</th>
             <th>Recent Song</th>
             <th style="text-align: right;">Action</th>
@@ -1231,6 +1232,7 @@
           '<td>' + userLink + '</td>' +
           '<td><span class="mono-cell">' + u.chat_id + '</span></td>' +
           '<td>' + passBadge + '</td>' +
+          '<td><span class="mono-cell">' + formatRelativeTime(u.last_login) + '</span></td>' +
           '<td><span class="mono-cell">' + u.daily_downloads + '</span></td>' +
           '<td style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 12px;">' + recentStr + '</td>' +
           '<td style="text-align: right;"><button class="btn-secondary" style="padding: 4px 8px; font-size: 12px; min-height: 28px;" onclick="quickGrant(' + u.chat_id + ')">Grant</button></td>' +
