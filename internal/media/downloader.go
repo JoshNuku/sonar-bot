@@ -337,6 +337,36 @@ func (d *Downloader) RememberTrack(info TrackInfo) {
 	}
 }
 
+// ResolveTitle fetches the canonical track title via YouTube oEmbed API if not in memory.
+func (d *Downloader) ResolveTitle(ctx context.Context, videoID string) string {
+	if info, ok := d.GetCachedTrackInfo(videoID); ok && info.Title != "" {
+		return info.Title
+	}
+
+	reqURL := fmt.Sprintf("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=%s&format=json", videoID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		var data struct {
+			Title string `json:"title"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&data); err == nil && data.Title != "" {
+			d.RememberTrack(TrackInfo{ID: videoID, Title: data.Title})
+			return data.Title
+		}
+	}
+	return ""
+}
+
 type innerTubeSearchResponse struct {
 	Contents struct {
 		TwoColumnSearchResultsRenderer struct {

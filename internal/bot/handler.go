@@ -100,24 +100,91 @@ func downloadThumbnailBytes(ctx context.Context, videoID string) ([]byte, error)
 	return io.ReadAll(resp.Body)
 }
 
+func cleanTitle(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, "*_`~")
+	s = strings.TrimPrefix(s, "🎧")
+	s = strings.TrimPrefix(s, "🎵")
+	s = strings.TrimPrefix(s, "🎬")
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "Found:")
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, "*_`~")
+	return strings.TrimSpace(s)
+}
+
+func parseButtonTrackTitle(text string) string {
+	clean := cleanTitle(text)
+	// Strip leading numbering like "1. ", "2. ", "3. "
+	if idx := strings.Index(clean, ". "); idx != -1 && idx <= 3 {
+		clean = strings.TrimSpace(clean[idx+2:])
+	}
+	// Strip trailing duration like " (3:15)"
+	if idx := strings.LastIndex(clean, "("); idx != -1 && strings.HasSuffix(clean, ")") {
+		clean = strings.TrimSpace(clean[:idx])
+	}
+	if idx := strings.LastIndex(clean, "["); idx != -1 && strings.HasSuffix(clean, "]") {
+		clean = strings.TrimSpace(clean[:idx])
+	}
+	return clean
+}
+
 func extractTrackTitle(msg *tgbotapi.Message, videoID string, dl *media.Downloader) string {
+	// 1. Check in-memory track cache
 	if info, ok := dl.GetCachedTrackInfo(videoID); ok && info.Title != "" {
-		return info.Title
+		cleaned := cleanTitle(info.Title)
+		if !strings.Contains(cleaned, "Confirm your song") {
+			return cleaned
+		}
 	}
-	if msg == nil {
-		return "Sonar Track"
+
+	// 2. Check inline keyboard buttons (the button the user tapped has the exact song title!)
+	if msg != nil && msg.ReplyMarkup != nil {
+		for _, row := range msg.ReplyMarkup.InlineKeyboard {
+			for _, btn := range row {
+				if btn.CallbackData != nil {
+					cb := *btn.CallbackData
+					if cb == fmt.Sprintf("select:%s", videoID) || cb == fmt.Sprintf("audio:%s", videoID) || cb == fmt.Sprintf("video:%s", videoID) {
+						parsed := parseButtonTrackTitle(btn.Text)
+						if parsed != "" && !strings.Contains(parsed, "Confirm your song") && !strings.Contains(parsed, "Audio (M4A)") && !strings.Contains(parsed, "Video (720p)") {
+							dl.RememberTrack(media.TrackInfo{ID: videoID, Title: parsed})
+							return parsed
+						}
+					}
+				}
+			}
+		}
 	}
-	raw := msg.Caption
-	if raw == "" {
-		raw = msg.Text
+
+	// 3. Check message text / caption for "Found:"
+	if msg != nil {
+		raw := msg.Caption
+		if raw == "" {
+			raw = msg.Text
+		}
+		lines := strings.Split(strings.TrimSpace(raw), "\n")
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "Found:") && i+1 < len(lines) {
+				candidate := cleanTitle(lines[i+1])
+				if candidate != "" && !strings.Contains(candidate, "Confirm your song") {
+					dl.RememberTrack(media.TrackInfo{ID: videoID, Title: candidate})
+					return candidate
+				}
+			}
+		}
 	}
-	lines := strings.Split(strings.TrimSpace(raw), "\n")
-	if len(lines) >= 2 && strings.HasPrefix(lines[0], "Found:") {
-		return strings.TrimSpace(lines[1])
+
+	// 4. Guaranteed fallback: Fetch real title from YouTube oEmbed API
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if title := dl.ResolveTitle(ctx, videoID); title != "" {
+		cleaned := cleanTitle(title)
+		if cleaned != "" {
+			return cleaned
+		}
 	}
-	if len(lines) > 0 && lines[0] != "" {
-		return strings.TrimSpace(lines[0])
-	}
+
 	return "Sonar Track"
 }
 
