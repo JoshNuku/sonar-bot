@@ -617,7 +617,8 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 	}
 
 	// Cache Miss: Download stream & thumbnail in parallel
-	statusMsg, _ := b.bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("⏳ Downloading %s... (0%%)", trackTitle)))
+	currentPct := 12
+	statusMsg, _ := b.bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("⏳ Downloading %s... (%s)", trackTitle, formatPercent(currentPct))))
 
 	var (
 		filePath   string
@@ -627,19 +628,47 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 		wg         sync.WaitGroup
 		editMu     sync.Mutex
 		lastEdit   = time.Now()
+		dlDone     = make(chan struct{})
 	)
 
-	onDownloadProgress := func(pct int) {
+	updateDownloadMsg := func(pct int) {
 		editMu.Lock()
 		defer editMu.Unlock()
+		if pct <= currentPct && pct < 100 {
+			return
+		}
+		currentPct = pct
 		now := time.Now()
-		if now.Sub(lastEdit) < 1300*time.Millisecond && pct < 100 {
+		if now.Sub(lastEdit) < 1200*time.Millisecond && pct < 100 {
 			return
 		}
 		lastEdit = now
-		text := fmt.Sprintf("⏳ Downloading %s... (%s)", trackTitle, formatPercent(pct))
+		text := fmt.Sprintf("⏳ Downloading %s... (%s)", trackTitle, formatPercent(currentPct))
 		edit := tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, text)
 		_, _ = b.bot.Send(edit)
+	}
+
+	// Smooth progressive ticker so user sees continuous progress instead of staying at 0%
+	go func() {
+		ticker := time.NewTicker(1200 * time.Millisecond)
+		defer ticker.Stop()
+		steps := []int{28, 46, 67, 83, 92, 96}
+		stepIdx := 0
+		for {
+			select {
+			case <-dlDone:
+				return
+			case <-ticker.C:
+				if stepIdx < len(steps) {
+					updateDownloadMsg(steps[stepIdx])
+					stepIdx++
+				}
+			}
+		}
+	}()
+
+	onDownloadProgress := func(pct int) {
+		updateDownloadMsg(pct)
 	}
 
 	wg.Add(2)
@@ -652,6 +681,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 		thumbBytes, thumbErr = downloadThumbnailBytes(ctx, videoID)
 	}()
 	wg.Wait()
+	close(dlDone)
 
 	if dlErr != nil {
 		log.Printf("DownloadStream error (%s, %s): %v", videoID, format, dlErr)
