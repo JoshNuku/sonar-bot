@@ -3,324 +3,627 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sonar Bot — Admin Dashboard</title>
+  <title>Sonar — Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090D16;
-      --card-bg: #111827;
-      --card-border: #1F2937;
-      --card-hover: #172033;
-      --text: #F3F4F6;
-      --text-muted: #9CA3AF;
-      --primary: #06B6D4;
-      --primary-hover: #0891B2;
-      --accent: #8B5CF6;
-      --success: #10B981;
-      --danger: #EF4444;
-      --warning: #F59E0B;
+      --bg: #000000;
+      --surface: #0a0a0a;
+      --surface-hover: #121212;
+      --surface-subtle: #171717;
+      --border: #222222;
+      --border-subtle: #1a1a1a;
+      --text: #ededed;
+      --text-muted: #888888;
+      --text-dim: #555555;
+      --accent: #ffffff;
+      --accent-contrast: #000000;
+      --success: #22c55e;
+      --success-muted: rgba(34, 197, 94, 0.12);
+      --danger: #ef4444;
+      --danger-muted: rgba(239, 68, 68, 0.12);
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: var(--font-sans);
       background-color: var(--bg);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
-    .container { max-width: 1200px; margin: 0 auto; width: 100%; padding: 24px; }
-    
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 32px 24px;
+    }
+
     /* Header */
     header {
-      background: rgba(17, 24, 39, 0.85);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
       z-index: 40;
     }
+
     .header-inner {
       max-width: 1200px;
       margin: 0 auto;
-      padding: 16px 24px;
+      padding: 14px 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
     }
-    .logo { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 20px; }
-    .badge-live {
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .brand-mark {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-sep {
+      color: var(--border);
+      font-weight: 300;
+      font-size: 14px;
+    }
+
+    .brand-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .status-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
       font-size: 12px;
-      font-weight: 600;
-      background: rgba(16, 185, 129, 0.15);
-      color: var(--success);
-      padding: 4px 10px;
-      border-radius: 9999px;
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      font-weight: 500;
+      color: var(--text-muted);
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
     }
-    .pulse-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); }
-    
-    .header-actions { display: flex; align-items: center; gap: 12px; }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Buttons */
     button {
       cursor: pointer;
       font-family: inherit;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       font-weight: 500;
-      font-size: 14px;
-      transition: all 0.2s;
+      font-size: 13px;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
     }
-    .btn-primary {
-      background: var(--primary);
-      color: #000;
-      border: none;
-      padding: 8px 16px;
-      font-weight: 600;
-    }
-    .btn-primary:hover { background: var(--primary-hover); }
-    .btn-secondary {
-      background: var(--card-bg);
-      color: var(--text);
-      border: 1px solid var(--card-border);
-      padding: 8px 14px;
-    }
-    .btn-secondary:hover { background: var(--card-hover); }
-    .btn-danger {
-      background: rgba(239, 68, 68, 0.15);
-      color: var(--danger);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      padding: 8px 14px;
-    }
-    .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
 
-    /* Login Card */
+    .btn-primary {
+      background: var(--accent);
+      color: var(--accent-contrast);
+      border: 1px solid var(--accent);
+      padding: 7px 14px;
+    }
+    .btn-primary:hover {
+      background: #e1e1e1;
+      border-color: #e1e1e1;
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 7px 13px;
+    }
+    .btn-secondary:hover {
+      background: var(--surface-hover);
+      border-color: #333333;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      padding: 7px 10px;
+    }
+    .btn-ghost:hover {
+      color: var(--text);
+      background: var(--surface-hover);
+    }
+
+    /* Login View */
     #loginView {
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 80vh;
-      padding: 24px;
+      flex: 1;
+      padding: 32px 16px;
     }
-    .login-box {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 36px;
+
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px 32px;
       width: 100%;
-      max-width: 400px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      max-width: 380px;
     }
-    .form-group { margin-bottom: 20px; }
-    .form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-muted); }
+
+    .login-header {
+      margin-bottom: 24px;
+    }
+
+    .login-header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .login-header p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
     .form-input {
       width: 100%;
       background: var(--bg);
-      border: 1px solid var(--card-border);
+      border: 1px solid var(--border);
       color: var(--text);
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 15px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: inherit;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.15s ease;
     }
-    .form-input:focus { border-color: var(--primary); }
+    .form-input:focus {
+      border-color: var(--text-muted);
+    }
 
-    /* KPIs */
+    .login-error {
+      color: var(--danger);
+      font-size: 12px;
+      margin-bottom: 12px;
+      display: none;
+      padding: 8px 10px;
+      background: var(--danger-muted);
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    /* KPI Grid */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 16px;
-      margin-bottom: 28px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
     }
+
     .kpi-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 20px;
-      position: relative;
-      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+      transition: border-color 0.15s ease;
     }
-    .kpi-card::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--primary), var(--accent));
-      opacity: 0.8;
+    .kpi-card:hover {
+      border-color: #333333;
     }
-    .kpi-title { font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
-    .kpi-value { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
-    .kpi-sub { font-size: 12px; color: var(--text-muted); }
+
+    .kpi-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .kpi-value {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
 
     /* Analytics Grid */
     .analytics-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 20px;
+      gap: 16px;
       margin-bottom: 28px;
     }
-    @media(max-width: 768px) {
-      .analytics-grid { grid-template-columns: 1fr; }
-    }
-    .analytics-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 20px;
-    }
-    .card-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
     }
 
-    /* Leaderboard items */
-    .leader-item {
+    .panel-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-subtle);
     }
-    .leader-item:last-child { border-bottom: none; }
-    .leader-name { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; }
-    .rank-num {
-      width: 24px;
-      height: 24px;
-      background: var(--card-hover);
-      border-radius: 6px;
-      display: inline-flex;
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+
+    .panel-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* List items */
+    .rank-row {
+      display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 13px;
+      gap: 12px;
+    }
+    .rank-row:last-child {
+      border-bottom: none;
+    }
+
+    .rank-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .rank-idx {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      width: 14px;
+      flex-shrink: 0;
+    }
+
+    .rank-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+
+    .rank-metric {
+      font-family: var(--font-mono);
       font-size: 12px;
-      font-weight: 700;
-      color: var(--primary);
+      color: var(--text-muted);
+      flex-shrink: 0;
     }
 
     /* Tabs */
-    .tabs {
+    .nav-tabs {
       display: flex;
-      gap: 8px;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
       margin-bottom: 16px;
-      border-bottom: 1px solid var(--card-border);
-      padding-bottom: 12px;
     }
-    .tab-btn {
+
+    .tab-item {
       background: transparent;
       border: none;
+      border-bottom: 2px solid transparent;
       color: var(--text-muted);
-      padding: 8px 16px;
-      font-size: 14px;
-      font-weight: 600;
-      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 0;
+      margin-bottom: -1px;
     }
-    .tab-btn.active {
-      background: var(--card-bg);
-      color: var(--primary);
-      border: 1px solid var(--card-border);
+    .tab-item:hover {
+      color: var(--text);
+    }
+    .tab-item.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
     }
 
     /* Tables */
-    .table-container {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
+    .table-wrapper {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
       overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+
     th {
-      background: rgba(0,0,0,0.2);
+      background: #0d0d0d;
       color: var(--text-muted);
-      font-weight: 600;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--card-border);
-      font-size: 12px;
+      font-weight: 500;
+      font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
     }
-    td {
-      padding: 14px 16px;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-      color: var(--text);
-    }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(255,255,255,0.015); }
 
-    .tag-pill {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 4px;
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text);
+      vertical-align: middle;
     }
-    .pill-free { background: rgba(156, 163, 175, 0.15); color: #9CA3AF; }
-    .pill-pass { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
-    .pill-format { background: rgba(6, 182, 212, 0.15); color: var(--primary); }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .mono-cell {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 7px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+
+    .badge-subtle {
+      background: var(--surface-subtle);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .badge-pass {
+      background: var(--success-muted);
+      color: var(--success);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+
+    .badge-mono {
+      font-family: var(--font-mono);
+      background: var(--surface-subtle);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
 
     /* Modal */
-    .modal-overlay {
+    .modal-backdrop {
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.7);
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
       backdrop-filter: blur(4px);
       display: none;
       align-items: center;
       justify-content: center;
       z-index: 50;
+      padding: 16px;
     }
-    .modal-box {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 28px;
-      max-width: 440px;
+
+    .modal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      max-width: 400px;
       width: 100%;
-      box-shadow: 0 25px 50px rgba(0,0,0,0.7);
+    }
+
+    .modal-header {
+      margin-bottom: 18px;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .modal-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .analytics-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        padding: 16px 12px;
+      }
+      .header-inner {
+        padding: 12px 14px;
+      }
+      .brand-sub, .brand-sep {
+        display: none;
+      }
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .kpi-card {
+        padding: 12px 14px;
+      }
+      .kpi-value {
+        font-size: 20px;
+      }
+      .header-actions button span {
+        display: none;
+      }
+      .form-input {
+        font-size: 16px; /* Prevents auto-zoom on iOS */
+      }
+      .nav-tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+      }
     }
   </style>
 </head>
 <body>
 
-  <!-- Header -->
+  <!-- Top Navigation -->
   <header>
     <div class="header-inner">
-      <div class="logo">
-        <span>🎧</span>
-        <span>Sonar Admin</span>
-        <span class="badge-live"><span class="pulse-dot"></span> Live</span>
+      <div class="brand">
+        <div class="brand-mark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12h20M7 7l5-5 5 5M7 17l5 5 5-5"/>
+          </svg>
+        </div>
+        <span class="brand-title">Sonar</span>
+        <span class="brand-sep">/</span>
+        <span class="brand-sub">Admin</span>
+        <div class="status-badge">
+          <span class="status-dot"></span>
+          <span>Live</span>
+        </div>
       </div>
+
       <div class="header-actions" id="navActions" style="display: none;">
-        <button class="btn-secondary" onclick="fetchData()">🔄 Refresh</button>
-        <button class="btn-primary" onclick="openGrantModal()">⚡ Grant Pass</button>
-        <button class="btn-danger" onclick="logout()">Logout</button>
+        <button class="btn-secondary" onclick="fetchData()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+          <span>Refresh</span>
+        </button>
+        <button class="btn-primary" onclick="openGrantModal()">
+          <span>Grant Pass</span>
+        </button>
+        <button class="btn-ghost" onclick="logout()">
+          <span>Sign Out</span>
+        </button>
       </div>
     </div>
   </header>
 
   <!-- Login View -->
   <div id="loginView">
-    <div class="login-box">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <div style="font-size: 40px; margin-bottom: 10px;">🎧</div>
-        <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Sonar Control Center</h2>
-        <p style="font-size: 13px; color: var(--text-muted);">Enter your admin password to view analytics</p>
+    <div class="login-card">
+      <div class="login-header">
+        <h1>Sonar Admin</h1>
+        <p>Authenticate with your administrative key to view system activity.</p>
       </div>
       <form onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label class="form-label">Admin Password</label>
-          <input type="password" id="adminPassword" class="form-input" placeholder="••••••••" required autofocus>
+          <label class="form-label" for="adminPassword">Password</label>
+          <input type="password" id="adminPassword" class="form-input" placeholder="Enter key" required autofocus>
         </div>
-        <div id="loginError" style="color: var(--danger); font-size: 13px; margin-bottom: 14px; display: none;"></div>
-        <button type="submit" class="btn-primary" style="width: 100%; padding: 12px;">Sign In</button>
+        <div id="loginError" class="login-error"></div>
+        <button type="submit" class="btn-primary" style="width: 100%; padding: 10px;">Continue</button>
       </form>
     </div>
   </div>
@@ -328,67 +631,67 @@
   <!-- Dashboard Main View -->
   <main id="dashboardView" style="display: none;" class="container">
     
-    <!-- KPI Row -->
+    <!-- Metrics Row -->
     <div class="kpi-grid">
       <div class="kpi-card">
-        <div class="kpi-title">TOTAL REGISTERED USERS</div>
+        <div class="kpi-title">Registered Users</div>
         <div class="kpi-value" id="kpiUsers">0</div>
         <div class="kpi-sub" id="kpiActiveToday">0 active today</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">ACTIVE PASSES</div>
-        <div class="kpi-value" id="kpiPasses" style="color: var(--success);">0</div>
-        <div class="kpi-sub">Unlimited downloads active</div>
+        <div class="kpi-title">Active Passes</div>
+        <div class="kpi-value" id="kpiPasses">0</div>
+        <div class="kpi-sub">Unlimited access active</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">DOWNLOADS TODAY</div>
+        <div class="kpi-title">Downloads Today</div>
         <div class="kpi-value" id="kpiDownloads">0</div>
-        <div class="kpi-sub" id="kpiTotalCached">0 cached tracks in cloud</div>
+        <div class="kpi-sub" id="kpiTotalCached">0 cached media files</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">TOTAL REVENUE (PAYSTACK)</div>
-        <div class="kpi-value" id="kpiRevenue" style="color: var(--primary);">GHS 0.00</div>
-        <div class="kpi-sub">Mobile Money volume</div>
+        <div class="kpi-title">Volume (Paystack)</div>
+        <div class="kpi-value" id="kpiRevenue">GHS 0.00</div>
+        <div class="kpi-sub">Gross Mobile Money</div>
       </div>
     </div>
 
-    <!-- Analytics Section -->
+    <!-- Analytics Breakdown -->
     <div class="analytics-grid">
-      <!-- Top Downloaded Songs -->
-      <div class="analytics-card">
-        <div class="card-title">
-          <span>🔥 Most Downloaded Tracks</span>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Top Requested Tracks</span>
+          <span class="panel-sub" id="topSongsSub">Top 5</span>
         </div>
         <div id="topSongsList">Loading...</div>
       </div>
 
-      <!-- Format Breakdown -->
-      <div class="analytics-card">
-        <div class="card-title">
-          <span>📊 Media Format Distribution</span>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Media Format Distribution</span>
+          <span class="panel-sub">Streams Delivered</span>
         </div>
         <div id="formatStatsList">Loading...</div>
       </div>
     </div>
 
     <!-- Navigation Tabs -->
-    <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('usersTab', this)">👥 All Users</button>
-      <button class="tab-btn" onclick="switchTab('downloadsTab', this)">📥 Recent Downloads</button>
-      <button class="tab-btn" onclick="switchTab('paymentsTab', this)">💳 MoMo Payments</button>
+    <div class="nav-tabs">
+      <button class="tab-item active" onclick="switchTab('usersTab', this)">Users</button>
+      <button class="tab-item" onclick="switchTab('downloadsTab', this)">Recent Downloads</button>
+      <button class="tab-item" onclick="switchTab('paymentsTab', this)">Transactions</button>
     </div>
 
     <!-- Users Table Tab -->
-    <div id="usersTab" class="table-container">
+    <div id="usersTab" class="table-wrapper">
       <table>
         <thead>
           <tr>
-            <th>Telegram User</th>
+            <th>User</th>
             <th>Chat ID</th>
-            <th>Pass Status</th>
-            <th>Downloads Today</th>
-            <th>Recent Tracks</th>
-            <th>Actions</th>
+            <th>Status</th>
+            <th>Usage Today</th>
+            <th>Recent Song</th>
+            <th style="text-align: right;">Action</th>
           </tr>
         </thead>
         <tbody id="usersTableBody"></tbody>
@@ -396,14 +699,14 @@
     </div>
 
     <!-- Recent Downloads Tab -->
-    <div id="downloadsTab" class="table-container" style="display: none;">
+    <div id="downloadsTab" class="table-wrapper" style="display: none;">
       <table>
         <thead>
           <tr>
-            <th>Track Title</th>
+            <th>Title</th>
             <th>Format</th>
-            <th>YouTube ID</th>
-            <th>Downloaded At</th>
+            <th>Video ID</th>
+            <th>Timestamp</th>
           </tr>
         </thead>
         <tbody id="downloadsTableBody"></tbody>
@@ -411,15 +714,15 @@
     </div>
 
     <!-- Payments Tab -->
-    <div id="paymentsTab" class="table-container" style="display: none;">
+    <div id="paymentsTab" class="table-wrapper" style="display: none;">
       <table>
         <thead>
           <tr>
             <th>Reference</th>
             <th>Chat ID</th>
-            <th>Plan Tier</th>
+            <th>Plan</th>
             <th>Amount</th>
-            <th>Processed At</th>
+            <th>Processed</th>
           </tr>
         </thead>
         <tbody id="paymentsTableBody"></tbody>
@@ -429,26 +732,28 @@
   </main>
 
   <!-- Grant Pass Modal -->
-  <div class="modal-overlay" id="grantModal">
-    <div class="modal-box">
-      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 6px;">⚡ Grant Unlimited Pass</h3>
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Instantly grant a user free unlimited downloads.</p>
+  <div class="modal-backdrop" id="grantModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Grant Manual Pass</h3>
+        <p class="modal-desc">Assign unlimited download access to a Telegram user.</p>
+      </div>
       <form onsubmit="handleGrantPass(event)">
         <div class="form-group">
-          <label class="form-label">Telegram Chat ID</label>
+          <label class="form-label" for="grantChatID">Telegram Chat ID</label>
           <input type="number" id="grantChatID" class="form-input" placeholder="e.g. 2081516511" required>
         </div>
         <div class="form-group">
-          <label class="form-label">Duration</label>
+          <label class="form-label" for="grantDuration">Access Duration</label>
           <select id="grantDuration" class="form-input" style="cursor: pointer;">
-            <option value="24">⚡ Day Pass (24 Hours)</option>
-            <option value="168">🔥 Weekly Pass (7 Days)</option>
-            <option value="720">👑 Monthly Pass (30 Days)</option>
+            <option value="24">Day Pass (24 hours)</option>
+            <option value="168">Weekly Pass (7 days)</option>
+            <option value="720">Monthly Pass (30 days)</option>
           </select>
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <div class="modal-actions">
           <button type="button" class="btn-secondary" onclick="closeGrantModal()">Cancel</button>
-          <button type="submit" class="btn-primary">Grant Access</button>
+          <button type="submit" class="btn-primary">Confirm</button>
         </div>
       </form>
     </div>
@@ -487,11 +792,11 @@
           showDashboard();
           fetchData();
         } else {
-          errEl.textContent = json.error || 'Invalid admin password';
+          errEl.textContent = json.error || 'Invalid credentials.';
           errEl.style.display = 'block';
         }
       } catch (err) {
-        errEl.textContent = 'Connection error. Try again.';
+        errEl.textContent = 'Connection failed. Please retry.';
         errEl.style.display = 'block';
       }
     }
@@ -528,75 +833,83 @@
     }
 
     function renderDashboard(data) {
-      // KPIs
-      document.getElementById('kpiUsers').textContent = data.kpis.total_users;
+      // Metrics
+      document.getElementById('kpiUsers').textContent = Number(data.kpis.total_users).toLocaleString();
       document.getElementById('kpiActiveToday').textContent = data.kpis.active_today + ' active today';
-      document.getElementById('kpiPasses').textContent = data.kpis.active_passes_count;
-      document.getElementById('kpiDownloads').textContent = data.kpis.downloads_today;
-      document.getElementById('kpiTotalCached').textContent = data.kpis.total_cached_tracks + ' cached media files';
+      document.getElementById('kpiPasses').textContent = Number(data.kpis.active_passes_count).toLocaleString();
+      document.getElementById('kpiDownloads').textContent = Number(data.kpis.downloads_today).toLocaleString();
+      document.getElementById('kpiTotalCached').textContent = Number(data.kpis.total_cached_tracks).toLocaleString() + ' cached media files';
       
       const revGhs = (data.kpis.total_revenue_cents / 100).toFixed(2);
       document.getElementById('kpiRevenue').textContent = 'GHS ' + revGhs;
 
-      // Top Songs
+      // Top Requested Tracks
       const topEl = document.getElementById('topSongsList');
       if (data.top_songs && data.top_songs.length > 0) {
         topEl.innerHTML = data.top_songs.map(function(s, idx) {
-          return '<div class="leader-item">' +
-            '<div class="leader-name">' +
-              '<span class="rank-num">' + (idx + 1) + '</span>' +
-              '<span>' + escapeHtml(s.title) + '</span>' +
+          return '<div class="rank-row">' +
+            '<div class="rank-info">' +
+              '<span class="rank-idx">' + (idx + 1) + '</span>' +
+              '<span class="rank-label">' + escapeHtml(s.title) + '</span>' +
             '</div>' +
-            '<span class="tag-pill pill-format">' + s.count + ' downloads</span>' +
+            '<span class="rank-metric">' + s.count + '</span>' +
           '</div>';
         }).join('');
       } else {
-        topEl.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No downloads recorded yet.</div>';
+        topEl.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; padding: 8px 0;">No download data yet.</div>';
       }
 
       // Format Distribution
       const fmtEl = document.getElementById('formatStatsList');
       if (data.format_stats && data.format_stats.length > 0) {
-        fmtEl.innerHTML = data.format_stats.map(function(f) {
-          const label = f.format.indexOf('audio') !== -1 ? '🎵 Audio (M4A)' : '🎬 Video (720p)';
-          return '<div class="leader-item">' +
-            '<div class="leader-name"><span>' + label + '</span></div>' +
-            '<span class="tag-pill pill-format">' + f.count + ' items</span>' +
+        fmtEl.innerHTML = data.format_stats.map(function(f, idx) {
+          const label = f.format.indexOf('audio') !== -1 ? 'Audio (M4A)' : 'Video (720p)';
+          return '<div class="rank-row">' +
+            '<div class="rank-info">' +
+              '<span class="rank-idx">' + (idx + 1) + '</span>' +
+              '<span class="rank-label">' + label + '</span>' +
+            '</div>' +
+            '<span class="rank-metric">' + f.count + '</span>' +
           '</div>';
         }).join('');
       } else {
-        fmtEl.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No media formatted yet.</div>';
+        fmtEl.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; padding: 8px 0;">No media formatted yet.</div>';
       }
 
       // Users Table
       const uTbody = document.getElementById('usersTableBody');
       uTbody.innerHTML = data.users.map(function(u) {
-        let passBadge = '<span class="tag-pill pill-free">Free (5/day)</span>';
+        let passBadge = '<span class="badge badge-subtle">Free (5/day)</span>';
         if (u.is_premium) {
           const dateStr = u.premium_until ? new Date(u.premium_until).toLocaleDateString() : 'Active';
-          passBadge = '<span class="tag-pill pill-pass">⚡ Pass (' + dateStr + ')</span>';
+          passBadge = '<span class="badge badge-pass">Pass (' + dateStr + ')</span>';
         }
-        const userLink = u.username ? '<a href="https://t.me/' + u.username + '" target="_blank" style="color: var(--primary); text-decoration: none;">@' + u.username + '</a>' : '<span style="color: var(--text-muted);">(No username)</span>';
-        const recentStr = (u.recent_songs && u.recent_songs.length > 0) ? u.recent_songs.slice(0, 2).map(escapeHtml).join(' • ') : '<span style="color: var(--text-muted);">None</span>';
+        const userLink = u.username 
+          ? '<a href="https://t.me/' + u.username + '" target="_blank" style="color: var(--text); text-decoration: none; font-weight: 500;">@' + u.username + '</a>' 
+          : '<span style="color: var(--text-dim);">(none)</span>';
+        const recentStr = (u.recent_songs && u.recent_songs.length > 0) 
+          ? u.recent_songs.slice(0, 1).map(escapeHtml).join('') 
+          : '<span style="color: var(--text-dim);">-</span>';
 
         return '<tr>' +
-          '<td><b>' + userLink + '</b></td>' +
-          '<td><code>' + u.chat_id + '</code></td>' +
+          '<td>' + userLink + '</td>' +
+          '<td><span class="mono-cell">' + u.chat_id + '</span></td>' +
           '<td>' + passBadge + '</td>' +
-          '<td><b>' + u.daily_downloads + '</b></td>' +
-          '<td style="font-size: 12px;">' + recentStr + '</td>' +
-          '<td><button class="btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="quickGrant(' + u.chat_id + ')">⚡ Grant</button></td>' +
+          '<td><span class="mono-cell">' + u.daily_downloads + '</span></td>' +
+          '<td style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 12px;">' + recentStr + '</td>' +
+          '<td style="text-align: right;"><button class="btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="quickGrant(' + u.chat_id + ')">Grant</button></td>' +
         '</tr>';
       }).join('');
 
       // Downloads Table
       const dTbody = document.getElementById('downloadsTableBody');
       dTbody.innerHTML = data.recent_downloads.map(function(d) {
+        const fmtLabel = d.media_format.indexOf('audio') !== -1 ? 'Audio' : 'Video';
         return '<tr>' +
-          '<td><b>' + escapeHtml(d.title) + '</b></td>' +
-          '<td><span class="tag-pill pill-format">' + escapeHtml(d.media_format) + '</span></td>' +
-          '<td><a href="https://youtu.be/' + d.youtube_id + '" target="_blank" style="color: var(--primary); text-decoration: none;">' + d.youtube_id + '</a></td>' +
-          '<td style="color: var(--text-muted); font-size: 13px;">' + new Date(d.created_at).toLocaleString() + '</td>' +
+          '<td style="max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;">' + escapeHtml(d.title) + '</td>' +
+          '<td><span class="badge badge-mono">' + fmtLabel + '</span></td>' +
+          '<td><a href="https://youtu.be/' + d.youtube_id + '" target="_blank" class="mono-cell" style="color: var(--text-muted); text-decoration: none;">' + d.youtube_id + '</a></td>' +
+          '<td><span class="mono-cell">' + new Date(d.created_at).toLocaleString() + '</span></td>' +
         '</tr>';
       }).join('');
 
@@ -605,17 +918,17 @@
       pTbody.innerHTML = data.recent_payments.map(function(p) {
         const amt = (p.amount_cents / 100).toFixed(2);
         return '<tr>' +
-          '<td><code>' + escapeHtml(p.reference) + '</code></td>' +
-          '<td><code>' + p.chat_id + '</code></td>' +
-          '<td><span class="tag-pill pill-pass">' + escapeHtml(p.plan_tier || 'Pass') + '</span></td>' +
-          '<td><b>GHS ' + amt + '</b></td>' +
-          '<td style="color: var(--text-muted); font-size: 13px;">' + new Date(p.processed_at).toLocaleString() + '</td>' +
+          '<td><span class="mono-cell">' + escapeHtml(p.reference) + '</span></td>' +
+          '<td><span class="mono-cell">' + p.chat_id + '</span></td>' +
+          '<td><span class="badge badge-pass">' + escapeHtml(p.plan_tier || 'Pass') + '</span></td>' +
+          '<td><span class="mono-cell" style="color: var(--text); font-weight: 500;">GHS ' + amt + '</span></td>' +
+          '<td><span class="mono-cell">' + new Date(p.processed_at).toLocaleString() + '</span></td>' +
         '</tr>';
       }).join('');
     }
 
     function switchTab(tabId, btn) {
-      document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-item').forEach(function(b) { b.classList.remove('active'); });
       btn.classList.add('active');
       ['usersTab', 'downloadsTab', 'paymentsTab'].forEach(function(id) {
         document.getElementById(id).style.display = (id === tabId) ? 'block' : 'none';
@@ -645,7 +958,6 @@
         });
         const json = await res.json();
         if (json.ok) {
-          alert('Pass granted successfully!');
           closeGrantModal();
           fetchData();
         } else {
@@ -661,16 +973,15 @@
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // Auto-refresh every 12 seconds when dashboard is open
+    // Auto-refresh every 12 seconds when dashboard is active
     setInterval(function() {
       if (document.getElementById('dashboardView').style.display === 'block') {
         fetchData();
       }
     }, 12000);
 
-    // Initial load
+    // Initial check
     checkAuth();
   </script>
 </body>
 </html>
-
