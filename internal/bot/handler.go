@@ -399,23 +399,14 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	b.bot.Send(confirmMsg)
 }
 
-func renderProgressBar(percent int) string {
+func formatPercent(percent int) string {
 	if percent > 100 {
 		percent = 100
 	}
 	if percent < 0 {
 		percent = 0
 	}
-	filled := percent / 10
-	var sb strings.Builder
-	for i := 0; i < 10; i++ {
-		if i < filled {
-			sb.WriteString("▰")
-		} else {
-			sb.WriteString("▱")
-		}
-	}
-	return fmt.Sprintf("[%s] %d%%", sb.String(), percent)
+	return fmt.Sprintf("%d%%", percent)
 }
 
 type progressReader struct {
@@ -590,7 +581,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 	}
 
 	// Cache Miss: Download stream & thumbnail in parallel
-	statusMsg, _ := b.bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("⏳ Downloading %s...\n%s", trackTitle, renderProgressBar(0))))
+	statusMsg, _ := b.bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("⏳ Downloading %s... (0%%)", trackTitle)))
 
 	var (
 		filePath   string
@@ -610,7 +601,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 			return
 		}
 		lastEdit = now
-		text := fmt.Sprintf("⏳ Downloading %s...\n%s", trackTitle, renderProgressBar(pct))
+		text := fmt.Sprintf("⏳ Downloading %s... (%s)", trackTitle, formatPercent(pct))
 		edit := tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, text)
 		_, _ = b.bot.Send(edit)
 	}
@@ -633,7 +624,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 	}
 	defer os.Remove(filePath)
 
-	b.bot.Send(tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, fmt.Sprintf("📤 Uploading to Telegram...\n%s", renderProgressBar(0))))
+	b.bot.Send(tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, "📤 Uploading to Telegram... (0%)"))
 
 	ext := filepath.Ext(filePath)
 	if ext == "" {
@@ -658,7 +649,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 			return
 		}
 		lastEdit = now
-		text := fmt.Sprintf("📤 Uploading to Telegram...\n%s", renderProgressBar(pct))
+		text := fmt.Sprintf("📤 Uploading to Telegram... (%s)", formatPercent(pct))
 		edit := tgbotapi.NewEditMessageText(chatID, statusMsg.MessageID, text)
 		_, _ = b.bot.Send(edit)
 	}
