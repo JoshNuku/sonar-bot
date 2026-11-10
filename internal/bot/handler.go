@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -77,6 +78,16 @@ func (b *BotController) recordChatTurn(chatID int64, userMsg, assistantMsg strin
 		turns = turns[len(turns)-6:]
 	}
 	b.chatMem[chatID] = turns
+}
+
+var youtubeURLRegex = regexp.MustCompile(`(?i)(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([\w-]{11})`)
+
+func extractYouTubeVideoID(text string) string {
+	matches := youtubeURLRegex.FindStringSubmatch(text)
+	if len(matches) >= 2 {
+		return matches[1]
+	}
+	return ""
 }
 
 func youtubeThumbnailURL(videoID string) string {
@@ -349,7 +360,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	b.notifier.NotifyUserActivity(chatID, username, text)
 
 	if strings.HasPrefix(text, "/start") || strings.HasPrefix(text, "/help") {
-		welcome := "🎧 **Welcome to Sonar!**\n\nSend me any song title, artist, or video name (e.g. `First Person Shooter`) and I'll fetch the high-quality **M4A Audio** or **720p Video** for you.\n\n💡 *Tip: Type /trending to see top charting songs right now, or ask me for recommendations anytime!*\n\n`/terms`"
+		welcome := "🎧 **Welcome to Sonar!**\n\nDownload any **YouTube Video** or **Song** directly inside Telegram.\n\n• **Direct Link:** Paste any YouTube or Shorts link to download instantly\n• **Search:** Type any song title, creator, or video name (e.g. `First Person Shooter`, `MKBHD`, `Lo-fi beats`)\n• **Formats:** Clean **M4A Audio** or **720p Video**\n\n💡 *Tip: Type /trending to see top music charts, or /history to view recent downloads.*\n\n`/terms`"
 		reply := tgbotapi.NewMessage(chatID, welcome)
 		reply.ParseMode = "Markdown"
 		b.bot.Send(reply)
@@ -370,6 +381,21 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
+
+	// Direct YouTube Link Detection (e.g. youtube.com/watch?v=..., youtu.be/..., youtube.com/shorts/...)
+	if videoID := extractYouTubeVideoID(text); videoID != "" {
+		allowed, _, _, quotaErr := b.db.CheckQuota(ctx, chatID, username)
+		if quotaErr != nil {
+			log.Printf("Quota error on youtube link: %v", quotaErr)
+			return
+		}
+		if !allowed {
+			b.sendPaywall(chatID)
+			return
+		}
+		b.presentDirectVideoOptions(ctx, chatID, username, videoID)
+		return
+	}
 
 	// Direct Deezer Live Chart Lookup for trending queries
 	lowerText := strings.ToLower(text)
@@ -541,6 +567,44 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 		pr.onProg(pct)
 	}
 	return n, err
+}
+
+func (b *BotController) presentDirectVideoOptions(ctx context.Context, chatID int64, username, videoID string) {
+	b.dl.PrefetchAudio(videoID)
+	trackTitle := b.dl.ResolveTitle(ctx, videoID)
+	if trackTitle == "" {
+		trackTitle = "YouTube Video"
+	} else {
+		trackTitle = cleanTitle(trackTitle)
+	}
+	b.dl.RememberTrack(media.TrackInfo{ID: videoID, Title: trackTitle})
+	b.db.RecordUserSong(ctx, chatID, trackTitle)
+
+	_, remaining, _, _ := b.db.CheckQuota(ctx, chatID, username)
+
+	kb := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🎵 Audio (M4A)", fmt.Sprintf("audio:%s", videoID)),
+			tgbotapi.NewInlineKeyboardButtonData("🎬 Video (720p)", fmt.Sprintf("video:%s", videoID)),
+		),
+	)
+
+	quotaLine := fmt.Sprintf("Downloads left today: %d", remaining)
+	if remaining >= 999 {
+		quotaLine = "Pass Status: ⚡ Unlimited Active"
+	}
+	prompt := fmt.Sprintf("Found:\n**%s**\n\n%s\nSelect format:", trackTitle, quotaLine)
+
+	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(youtubeThumbnailURL(videoID)))
+	photo.Caption = prompt
+	photo.ParseMode = "Markdown"
+	photo.ReplyMarkup = kb
+	if _, err := b.bot.Send(photo); err != nil {
+		msg := tgbotapi.NewMessage(chatID, prompt)
+		msg.ParseMode = "Markdown"
+		msg.ReplyMarkup = kb
+		b.bot.Send(msg)
+	}
 }
 
 func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
