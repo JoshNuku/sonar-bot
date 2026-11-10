@@ -88,6 +88,14 @@ func (b *BotController) recordSession(chatID int64, username, sessionType, detai
 	}()
 }
 
+func (b *BotController) touchUser(chatID int64, username string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		b.db.TouchUser(ctx, chatID, username)
+	}()
+}
+
 var youtubeURLRegex = regexp.MustCompile(`(?i)(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([\w-]{11})`)
 
 func extractYouTubeVideoID(text string) string {
@@ -366,6 +374,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	username := msg.From.UserName
 	text := strings.TrimSpace(msg.Text)
 
+	b.touchUser(chatID, username)
 	b.notifier.NotifyUserActivity(chatID, username, text)
 
 	if strings.HasPrefix(text, "/start") || strings.HasPrefix(text, "/help") {
@@ -631,6 +640,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 	}
 	action, value := parts[0], parts[1]
 	chatID := cb.Message.Chat.ID
+	b.touchUser(chatID, cb.From.UserName)
 
 	// 1. Handle AI Song Suggestion Click ("search:<query>")
 	if action == "search" {

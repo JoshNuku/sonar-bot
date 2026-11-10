@@ -1329,11 +1329,14 @@
     function formatRelativeTime(isoStr) {
       if (!isoStr) return '-';
       const date = new Date(isoStr);
+      if (isNaN(date.getTime()) || date.getTime() <= 0) return '-';
       const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
       if (diffSec < 45) return 'Just now';
       if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm ago';
       if (diffSec < 86400) return Math.floor(diffSec / 3600) + 'h ago';
-      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      if (diffSec < 86400 * 2) return 'Yesterday';
+      if (diffSec < 86400 * 7) return Math.floor(diffSec / 86400) + 'd ago';
+      return date.toLocaleDateString();
     }
 
     function updateTweetCounter() {

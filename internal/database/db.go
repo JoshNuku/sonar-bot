@@ -80,6 +80,9 @@ func (db *DB) EnsureSchema(ctx context.Context) error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_user_sessions_created_at ON user_sessions (created_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_user_sessions_chat_id ON user_sessions (chat_id);`,
+		`UPDATE users 
+		 SET last_seen_at = (last_reset_date::timestamp + time '12:00:00')
+		 WHERE chat_id NOT IN (SELECT DISTINCT chat_id FROM user_sessions);`,
 	}
 	for _, q := range queries {
 		if _, err := db.Pool.Exec(ctx, q); err != nil {
@@ -237,4 +240,16 @@ func (db *DB) RecordSession(ctx context.Context, chatID int64, username, session
 	query := `INSERT INTO user_sessions (chat_id, username, session_type, details) VALUES ($1, $2, $3, $4)`
 	_, _ = db.Pool.Exec(ctx, query, chatID, username, sessionType, details)
 	_, _ = db.Pool.Exec(ctx, `UPDATE users SET last_seen_at = NOW() WHERE chat_id = $1`, chatID)
+}
+
+// TouchUser ensures the user is registered and updates their last_seen_at timestamp.
+func (db *DB) TouchUser(ctx context.Context, chatID int64, username string) {
+	query := `
+		INSERT INTO users (chat_id, username, daily_downloads, last_reset_date, is_premium, recent_songs, last_seen_at)
+		VALUES ($1, $2, 0, CURRENT_DATE, false, '{}', NOW())
+		ON CONFLICT (chat_id) DO UPDATE
+		SET last_seen_at = NOW(),
+		    username = COALESCE(NULLIF(EXCLUDED.username, ''), users.username);
+	`
+	_, _ = db.Pool.Exec(ctx, query, chatID, username)
 }
