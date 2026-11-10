@@ -264,6 +264,12 @@ func (b *BotController) pollPaymentStatus(chatID int64, reference string) {
 	}
 }
 
+func (b *BotController) NotifyStartup() {
+	if b.notifier != nil {
+		b.notifier.NotifyStartup()
+	}
+}
+
 // StartPaymentWatcher reconciles successful Paystack transactions automatically in the background
 // and immediately sends the Telegram subscription confirmation message without any user action.
 func (b *BotController) StartPaymentWatcher() {
@@ -332,6 +338,8 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	username := msg.From.UserName
 	text := strings.TrimSpace(msg.Text)
 
+	b.notifier.NotifyUserActivity(chatID, username, text)
+
 	if strings.HasPrefix(text, "/start") || strings.HasPrefix(text, "/help") {
 		welcome := "🎧 **Welcome to Sonar!**\n\nSend me any song title, artist, or video name (e.g. `First Person Shooter`) and I'll fetch the high-quality **M4A Audio** or **720p Video** for you.\n\n💡 *Tip: Type /trending to see top charting songs right now, or ask me for recommendations anytime!*\n\n`/terms`"
 		reply := tgbotapi.NewMessage(chatID, welcome)
@@ -351,8 +359,6 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 		b.bot.Send(reply)
 		return
 	}
-
-	b.notifier.NotifyUserActivity(chatID, username, text)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -662,6 +668,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 		cacheFormat = "audio_hq"
 	}
 	trackTitle := extractTrackTitle(cb.Message, videoID, b.dl)
+	b.notifier.NotifyDownload(chatID, cb.From.UserName, trackTitle, format)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()

@@ -47,6 +47,7 @@ func main() {
 	)
 
 	controller := bot.NewBotController(tgBot, db, groq, dl, ps, deezer, cfg.NtfyURL)
+	controller.NotifyStartup()
 	go controller.StartPaymentWatcher()
 
 	// Auxiliary HTTP Handlers
