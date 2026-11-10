@@ -207,3 +207,4 @@ func (c *DeezerClient) ValidateSuggestions(ctx context.Context, suggestions []st
 	}
 	return out
 }
+
