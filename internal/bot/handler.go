@@ -35,6 +35,8 @@ type BotController struct {
 	notifier *Notifier
 	chatMu   sync.Mutex
 	chatMem  map[int64][]ai.ChatTurn
+	replyMu  sync.Mutex
+	replyMap map[string]int
 }
 
 func NewBotController(
@@ -55,6 +57,67 @@ func NewBotController(
 		deezer:   deezer,
 		notifier: NewNotifier(ntfyURL),
 		chatMem:  make(map[int64][]ai.ChatTurn),
+		replyMap: make(map[string]int),
+	}
+}
+
+func replyMapKey(chatID int64, userMsgID int) string {
+	return fmt.Sprintf("%d:%d", chatID, userMsgID)
+}
+
+func (b *BotController) rememberBotReply(chatID int64, userMsgID, botMsgID int) {
+	if userMsgID == 0 || botMsgID == 0 {
+		return
+	}
+	b.replyMu.Lock()
+	defer b.replyMu.Unlock()
+	if len(b.replyMap) > 1000 {
+		b.replyMap = make(map[string]int)
+	}
+	b.replyMap[replyMapKey(chatID, userMsgID)] = botMsgID
+}
+
+func (b *BotController) lookupBotReply(chatID int64, userMsgID int) int {
+	if userMsgID == 0 {
+		return 0
+	}
+	b.replyMu.Lock()
+	defer b.replyMu.Unlock()
+	return b.replyMap[replyMapKey(chatID, userMsgID)]
+}
+
+// sendOrEditReply edits the bot's previous response in-place when handling an edited user message,
+// or sends a new message and records its ID for future edits.
+func (b *BotController) sendOrEditReply(chatID int64, userMsgID, editTargetID int, text, parseMode string, kb *tgbotapi.InlineKeyboardMarkup) {
+	if editTargetID != 0 {
+		edit := tgbotapi.NewEditMessageText(chatID, editTargetID, text)
+		edit.ParseMode = parseMode
+		if kb != nil {
+			edit.ReplyMarkup = kb
+		}
+		if _, err := b.bot.Send(edit); err == nil {
+			return
+		}
+		if parseMode != "" {
+			edit.ParseMode = ""
+			if _, err := b.bot.Send(edit); err == nil {
+				return
+			}
+		}
+	}
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = parseMode
+	if kb != nil {
+		msg.ReplyMarkup = *kb
+	}
+	sent, err := b.bot.Send(msg)
+	if err != nil && parseMode != "" {
+		msg.ParseMode = ""
+		sent, err = b.bot.Send(msg)
+	}
+	if err == nil && sent.MessageID != 0 {
+		b.rememberBotReply(chatID, userMsgID, sent.MessageID)
 	}
 }
 
@@ -370,6 +433,19 @@ func (b *BotController) sendPaywall(chatID int64) {
 }
 
 func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
+	b.handleMessageInternal(msg, 0)
+}
+
+// HandleEditedMessage re-processes edited user messages and updates the bot's previous reply in place when possible.
+func (b *BotController) HandleEditedMessage(msg *tgbotapi.Message) {
+	if msg == nil {
+		return
+	}
+	editTargetID := b.lookupBotReply(msg.Chat.ID, msg.MessageID)
+	b.handleMessageInternal(msg, editTargetID)
+}
+
+func (b *BotController) handleMessageInternal(msg *tgbotapi.Message, editTargetID int) {
 	chatID := msg.Chat.ID
 	username := msg.From.UserName
 	text := strings.TrimSpace(msg.Text)
@@ -436,10 +512,8 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 				))
 			}
 			sb.WriteString("\nTap any track below to fetch audio or video:")
-			reply := tgbotapi.NewMessage(chatID, sb.String())
-			reply.ParseMode = "Markdown"
-			reply.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
-			b.bot.Send(reply)
+			kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
+			b.sendOrEditReply(chatID, msg.MessageID, editTargetID, sb.String(), "Markdown", &kb)
 			return
 		}
 	}
@@ -468,10 +542,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 			))
 		}
 		kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
-		msg := tgbotapi.NewMessage(chatID, "🎧 **Your Recent Sonar History:**\nTap any track to grab it again:")
-		msg.ParseMode = "Markdown"
-		msg.ReplyMarkup = kb
-		b.bot.Send(msg)
+		b.sendOrEditReply(chatID, msg.MessageID, editTargetID, "🎧 **Your Recent Sonar History:**\nTap any track to grab it again:", "Markdown", &kb)
 		return
 	}
 
@@ -492,8 +563,6 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	if !parsed.IsSongQuery {
 		b.recordSession(chatID, username, "chat", "Asked AI: "+truncateButtonLabel(text, 80))
 		b.recordChatTurn(chatID, text, parsed.Reply)
-		reply := tgbotapi.NewMessage(chatID, parsed.Reply)
-		reply.ParseMode = "Markdown"
 
 		if len(parsed.Suggestions) > 0 {
 			// Validate suggestions with Deezer to guarantee real, released tracks
@@ -506,6 +575,7 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 			parsed.Suggestions = parsed.Suggestions[:3]
 		}
 
+		var kbPtr *tgbotapi.InlineKeyboardMarkup
 		if len(parsed.Suggestions) > 0 {
 			var rows [][]tgbotapi.InlineKeyboardButton
 			for _, s := range parsed.Suggestions {
@@ -520,14 +590,11 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 			}
 			if len(rows) > 0 {
 				kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
-				reply.ReplyMarkup = kb
+				kbPtr = &kb
 			}
 		}
 
-		if _, err := b.bot.Send(reply); err != nil {
-			reply.ParseMode = ""
-			b.bot.Send(reply)
-		}
+		b.sendOrEditReply(chatID, msg.MessageID, editTargetID, parsed.Reply, "Markdown", kbPtr)
 		return
 	}
 
@@ -537,34 +604,42 @@ func (b *BotController) HandleMessage(msg *tgbotapi.Message) {
 	}
 
 	query := parsed.SearchTerm
+	if parsed.IsMusic {
+		query = b.deezer.ResolveSongQuery(ctx, query)
+	}
 	b.recordSession(chatID, username, "search", "Searched: "+truncateButtonLabel(query, 80))
 	b.recordChatTurn(chatID, text, "Searched YouTube for: "+query)
 	tracks, err := b.dl.ResolveTracks(ctx, query, 5)
 	if err != nil || len(tracks) == 0 {
 		log.Printf("ResolveTracks error for %q: %v", query, err)
-		b.bot.Send(tgbotapi.NewMessage(chatID, "No matching results found on YouTube."))
+		b.sendOrEditReply(chatID, msg.MessageID, editTargetID, "No matching results found on YouTube.", "", nil)
 		return
 	}
 
-	// Present Top 5 matching songs so the user can confirm the exact track they want
+	prompt, kb := buildTrackConfirmMessage(query, tracks)
+	b.sendOrEditReply(chatID, msg.MessageID, editTargetID, prompt, "Markdown", &kb)
+}
+
+func buildTrackConfirmMessage(query string, tracks []media.TrackInfo) (string, tgbotapi.InlineKeyboardMarkup) {
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for i, t := range tracks {
 		dur := ""
 		if t.Duration != "" {
 			dur = fmt.Sprintf(" (%s)", t.Duration)
 		}
-		btnText := truncateButtonLabel(fmt.Sprintf("%d. %s%s", i+1, t.Title, dur), 58)
+		label := t.Title
+		channel := strings.TrimSpace(strings.TrimSuffix(strings.TrimSuffix(t.Channel, " - Topic"), "VEVO"))
+		if channel != "" && !strings.Contains(strings.ToLower(label), strings.ToLower(channel)) {
+			label = fmt.Sprintf("%s · %s", label, channel)
+		}
+		btnText := truncateButtonLabel(fmt.Sprintf("%d. %s%s", i+1, label, dur), 58)
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData(btnText, fmt.Sprintf("select:%s", t.ID)),
 		))
 	}
-
 	kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
 	prompt := fmt.Sprintf("🎧 **Confirm your song for:** `%s`\n\nSelect a track below:", query)
-	confirmMsg := tgbotapi.NewMessage(chatID, prompt)
-	confirmMsg.ParseMode = "Markdown"
-	confirmMsg.ReplyMarkup = kb
-	b.bot.Send(confirmMsg)
+	return prompt, kb
 }
 
 func formatPercent(percent int) string {
@@ -663,20 +738,7 @@ func (b *BotController) HandleCallback(cb *tgbotapi.CallbackQuery) {
 			return
 		}
 
-		var rows [][]tgbotapi.InlineKeyboardButton
-		for i, t := range tracks {
-			dur := ""
-			if t.Duration != "" {
-				dur = fmt.Sprintf(" (%s)", t.Duration)
-			}
-			btnText := truncateButtonLabel(fmt.Sprintf("%d. %s%s", i+1, t.Title, dur), 58)
-			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData(btnText, fmt.Sprintf("select:%s", t.ID)),
-			))
-		}
-
-		kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
-		prompt := fmt.Sprintf("🎧 **Confirm your song for:** `%s`\n\nSelect a track below:", value)
+		prompt, kb := buildTrackConfirmMessage(value, tracks)
 		reply := tgbotapi.NewMessage(chatID, prompt)
 		reply.ParseMode = "Markdown"
 		reply.ReplyMarkup = kb

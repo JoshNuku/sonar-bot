@@ -19,6 +19,7 @@ type GroqClient struct {
 type ExtractedQuery struct {
 	SearchTerm  string   `json:"search_term"`
 	IsSongQuery bool     `json:"is_song_query"`
+	IsMusic     bool     `json:"is_music"`
 	Reply       string   `json:"reply"`
 	Suggestions []string `json:"suggestions"`
 }
@@ -161,19 +162,22 @@ func (g *GroqClient) ParseQuery(ctx context.Context, userInput string, recentSon
 %s
 
 Analyze the user's latest message carefully:
-1. If searching for any song, music video, YouTube video, creator, podcast, interview, tutorial, or specific version (e.g. 'drake time flies', 'mkbhd review', 'first person shooter', 'mrbeast', 'time flies instrumental', 'lex fridman sam altman', 'sped up'):
+1. If searching for any song or music track, even WITHOUT an artist name (e.g. 'soso', 'water', 'feel no ways', 'grind day', 'drake time flies', 'time flies instrumental', 'sped up'):
+   - If the user gave only a song title and there is a well-known artist for it, enrich "search_term" to "Artist - Song Title" (e.g. 'feel no ways' -> 'Drake - Feel No Ways', 'soso' -> 'Omah Lay - Soso', 'water' -> 'Tyla - Water'). If unsure of the artist, keep the clean song title as "search_term".
    - Combine with recent conversation context if they are continuing or refining a request (e.g. 'by Drake', 'the instrumental version', 'video version').
    - Keep requested version modifiers in "search_term" (e.g. "Instrumental", "Remix", "Slowed & Reverb", "Sped Up", "Acoustic", "Live", "Karaoke", "Acapella").
-   - Set "is_song_query": true, "search_term": "<Clean Search Query / Title>", "reply": "", "suggestions": [].
-2. If looking for a style, mood, genre, theme, or general recommendations (e.g. 'recommend me upbeat workout music', 'what should I listen to', 'songs like X'):
-   - Set "is_song_query": false.
+   - Set "is_song_query": true, "is_music": true, "search_term": "<Artist - Song Title or Clean Song Title>", "reply": "", "suggestions": [].
+2. If searching for a non-music YouTube video, creator, podcast, interview, or tutorial (e.g. 'mkbhd iphone 16 review', 'mrbeast', 'lex fridman sam altman', 'golang crash course'):
+   - Set "is_song_query": true, "is_music": false, "search_term": "<Clean Video Query>", "reply": "", "suggestions": [].
+3. If looking for a style, mood, genre, theme, or general recommendations (e.g. 'recommend me upbeat workout music', 'what should I listen to', 'songs like X'):
+   - Set "is_song_query": false, "is_music": true.
    - Write an engaging, friendly "reply".
    - Populate "suggestions" with up to 3 real, matching "Artist - Title" strings so the user can tap to download them.
-3. If casual chatting, greeting, reacting, or saying phrases like 'no', 'hi', 'who are you', 'what can you do':
-   - Set "is_song_query": false, write a witty, natural, conversational "reply" explaining you can download both YouTube videos (720p MP4) and music (M4A audio) directly, and set "suggestions": [].
+4. If casual chatting, greeting, reacting, or saying phrases like 'no', 'hi', 'who are you', 'what can you do':
+   - Set "is_song_query": false, "is_music": false, write a witty, natural, conversational "reply" explaining you can download both YouTube videos (720p MP4) and music (M4A audio) directly, and set "suggestions": [].
 
 Respond with valid JSON ONLY on a single line:
-{"search_term": "Clean Title or Video Name", "is_song_query": true, "reply": "", "suggestions": []}`, historyContext, chatContext)
+{"search_term": "Artist - Song Title", "is_song_query": true, "is_music": true, "reply": "", "suggestions": []}`, historyContext, chatContext)
 
 	resp, err := g.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model: g.model,

@@ -165,6 +165,8 @@ func main() {
 
 			if update.Message != nil && update.Message.Text != "" {
 				go controller.HandleMessage(update.Message)
+			} else if update.EditedMessage != nil && update.EditedMessage.Text != "" {
+				go controller.HandleEditedMessage(update.EditedMessage)
 			} else if update.CallbackQuery != nil {
 				go controller.HandleCallback(update.CallbackQuery)
 			}
@@ -191,6 +193,8 @@ func main() {
 	for update := range updates {
 		if update.Message != nil && update.Message.Text != "" {
 			go controller.HandleMessage(update.Message)
+		} else if update.EditedMessage != nil && update.EditedMessage.Text != "" {
+			go controller.HandleEditedMessage(update.EditedMessage)
 		} else if update.CallbackQuery != nil {
 			go controller.HandleCallback(update.CallbackQuery)
 		}

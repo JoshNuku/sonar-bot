@@ -107,43 +107,94 @@ func (c *DeezerClient) GetTopTrending(ctx context.Context, limit int) ([]Track, 
 	return tracks, nil
 }
 
-// ValidateTrack queries Deezer to verify if a song exists and returns its canonical "Artist - Title".
-func (c *DeezerClient) ValidateTrack(ctx context.Context, query string) (string, bool) {
+// SearchTracks queries Deezer's popularity-ranked catalog and returns matching tracks.
+func (c *DeezerClient) SearchTracks(ctx context.Context, query string, limit int) ([]Track, error) {
 	clean := strings.TrimSpace(query)
 	if clean == "" {
-		return "", false
+		return nil, fmt.Errorf("empty query")
+	}
+	if limit <= 0 || limit > 10 {
+		limit = 5
 	}
 
-	searchURL := fmt.Sprintf("https://api.deezer.com/search?q=%s&limit=1", url.QueryEscape(clean))
+	searchURL := fmt.Sprintf("https://api.deezer.com/search?q=%s&limit=%d", url.QueryEscape(clean), limit)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
-		return clean, false
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "SonarBot/1.0")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return clean, false
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return clean, false
+		return nil, fmt.Errorf("deezer search status %d", resp.StatusCode)
 	}
 
 	var res deezerSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil || len(res.Data) == 0 {
-		return clean, false
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, err
 	}
 
-	best := res.Data[0]
-	artistName := strings.TrimSpace(best.Artist.Name)
-	trackTitle := strings.TrimSpace(best.Title)
-	if artistName == "" || trackTitle == "" {
-		return clean, false
+	var tracks []Track
+	for _, item := range res.Data {
+		artist := strings.TrimSpace(item.Artist.Name)
+		title := strings.TrimSpace(item.Title)
+		if artist == "" || title == "" {
+			continue
+		}
+		tracks = append(tracks, Track{
+			ID:       item.ID,
+			Title:    title,
+			Artist:   artist,
+			Rank:     item.Rank,
+			Duration: item.Duration,
+		})
+	}
+	return tracks, nil
+}
+
+// ResolveSongQuery enriches a bare song title (without an artist) into "Artist - Title" via Deezer's ranked search.
+// Returns the original query unchanged if it already contains an artist separator or no confident match is found.
+func (c *DeezerClient) ResolveSongQuery(ctx context.Context, query string) string {
+	clean := strings.TrimSpace(query)
+	if clean == "" || strings.Contains(clean, " - ") || len(strings.Fields(clean)) >= 5 {
+		return clean
 	}
 
-	return fmt.Sprintf("%s - %s", artistName, trackTitle), true
+	subCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	tracks, err := c.SearchTracks(subCtx, clean, 3)
+	if err != nil || len(tracks) == 0 {
+		return clean
+	}
+
+	lowerQuery := strings.ToLower(clean)
+	for _, t := range tracks {
+		lowerTitle := strings.ToLower(t.Title)
+		lowerArtist := strings.ToLower(t.Artist)
+		if strings.Contains(lowerQuery, lowerArtist) {
+			return clean
+		}
+		if lowerTitle == lowerQuery || strings.Contains(lowerTitle, lowerQuery) || strings.Contains(lowerQuery, lowerTitle) {
+			return fmt.Sprintf("%s - %s", t.Artist, t.Title)
+		}
+	}
+
+	return clean
+}
+
+// ValidateTrack queries Deezer to verify if a song exists and returns its canonical "Artist - Title".
+func (c *DeezerClient) ValidateTrack(ctx context.Context, query string) (string, bool) {
+	tracks, err := c.SearchTracks(ctx, query, 1)
+	if err != nil || len(tracks) == 0 {
+		return strings.TrimSpace(query), false
+	}
+	return fmt.Sprintf("%s - %s", tracks[0].Artist, tracks[0].Title), true
 }
 
 // ValidateSuggestions checks up to 5 suggested song titles concurrently against Deezer.
