@@ -47,6 +47,7 @@ func NewBotController(
 	ps *payment.PaystackService,
 	deezer *music.DeezerClient,
 	ntfyURL string,
+	adminChatID int64,
 ) *BotController {
 	return &BotController{
 		bot:      bot,
@@ -55,7 +56,7 @@ func NewBotController(
 		dl:       dl,
 		paystack: ps,
 		deezer:   deezer,
-		notifier: NewNotifier(ntfyURL),
+		notifier: NewNotifier(ntfyURL, bot, adminChatID),
 		chatMem:  make(map[int64][]ai.ChatTurn),
 		replyMap: make(map[string]int),
 	}

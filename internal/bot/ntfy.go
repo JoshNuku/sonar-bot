@@ -8,10 +8,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type Notifier struct {
 	ntfyURL      string
+	tgBot        *tgbotapi.BotAPI
+	adminChatID  int64
 	chatCooldown time.Duration
 	dlCooldown   time.Duration
 	mu           sync.Mutex
@@ -22,9 +26,11 @@ type Notifier struct {
 	client       *http.Client
 }
 
-func NewNotifier(ntfyURL string) *Notifier {
+func NewNotifier(ntfyURL string, tgBot *tgbotapi.BotAPI, adminChatID int64) *Notifier {
 	return &Notifier{
 		ntfyURL:      strings.TrimRight(strings.TrimSpace(ntfyURL), "/"),
+		tgBot:        tgBot,
+		adminChatID:  adminChatID,
 		chatCooldown: 30 * time.Minute, // Silent session alert once every 30 minutes per user
 		dlCooldown:   1 * time.Minute,  // Debounce consecutive rapid downloads from same user
 		lastChat:     make(map[int64]time.Time),
@@ -47,19 +53,53 @@ func (n *Notifier) recordStatus(status string) {
 	n.mu.Unlock()
 }
 
-// Status returns the configured ntfy URL, last delivery status, and last attempt time.
+// Status returns the configured notification target, last delivery status, and last attempt time.
 func (n *Notifier) Status() (string, string, time.Time) {
 	if n == nil {
 		return "", "not configured", time.Time{}
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	return n.ntfyURL, n.lastStatus, n.lastSentAt
+	target := n.ntfyURL
+	if n.adminChatID != 0 {
+		target = fmt.Sprintf("Telegram (%d)", n.adminChatID)
+	}
+	return target, n.lastStatus, n.lastSentAt
+}
+
+func (n *Notifier) sendTelegram(title, body, priority string) error {
+	if n == nil || n.tgBot == nil || n.adminChatID == 0 {
+		return fmt.Errorf("ADMIN_CHAT_ID not configured")
+	}
+	text := fmt.Sprintf("🔔 %s\n%s", title, body)
+	msg := tgbotapi.NewMessage(n.adminChatID, text)
+	if priority == "low" {
+		msg.DisableNotification = true
+	}
+	if _, err := n.tgBot.Send(msg); err != nil {
+		return fmt.Errorf("telegram admin alert error: %w", err)
+	}
+	return nil
 }
 
 func (n *Notifier) sendSync(title, body, priority, tags string) error {
-	if n == nil || n.ntfyURL == "" {
-		return fmt.Errorf("NTFY_URL is empty")
+	if n == nil {
+		return fmt.Errorf("notifier not initialized")
+	}
+
+	if n.tgBot != nil && n.adminChatID != 0 {
+		if err := n.sendTelegram(title, body, priority); err != nil {
+			log.Printf("[notify] %v", err)
+			n.recordStatus(err.Error())
+			return err
+		}
+		n.recordStatus("Telegram OK")
+		log.Printf("[notify] Telegram admin alert sent (%s): %s", priority, title)
+		return nil
+	}
+
+	if n.ntfyURL == "" {
+		return fmt.Errorf("neither ADMIN_CHAT_ID nor NTFY_URL is configured")
 	}
 
 	var lastErr error
@@ -117,7 +157,7 @@ func (n *Notifier) sendSync(title, body, priority, tags string) error {
 }
 
 func (n *Notifier) send(title, body, priority, tags string) {
-	if n == nil || n.ntfyURL == "" {
+	if n == nil || ((n.tgBot == nil || n.adminChatID == 0) && n.ntfyURL == "") {
 		return
 	}
 
@@ -138,7 +178,7 @@ func (n *Notifier) NotifyStartup() {
 
 // NotifyUserActivity sends a completely silent activity log ping once per 30-minute user session (no sound, no vibrate).
 func (n *Notifier) NotifyUserActivity(chatID int64, username, query string) {
-	if n == nil || n.ntfyURL == "" {
+	if n == nil || ((n.tgBot == nil || n.adminChatID == 0) && n.ntfyURL == "") {
 		return
 	}
 
@@ -158,7 +198,7 @@ func (n *Notifier) NotifyUserActivity(chatID int64, username, query string) {
 
 // NotifyDownload sends a normal alert when a user initiates a media download (debounced 1 min).
 func (n *Notifier) NotifyDownload(chatID int64, username, trackTitle, format string) {
-	if n == nil || n.ntfyURL == "" {
+	if n == nil || ((n.tgBot == nil || n.adminChatID == 0) && n.ntfyURL == "") {
 		return
 	}
 

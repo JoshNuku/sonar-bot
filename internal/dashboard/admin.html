@@ -1212,10 +1212,6 @@
         <span class="brand-title">Sonar</span>
         <span class="brand-sep">/</span>
         <span class="brand-sub">Admin</span>
-        <div class="status-badge">
-          <span class="status-dot"></span>
-          <span>Live</span>
-        </div>
       </div>
 
       <div class="header-actions">
@@ -1241,7 +1237,7 @@
               <div class="notif-head">
                 <span class="notif-head-title">Notifications</span>
                 <div style="display: flex; align-items: center; gap: 4px;">
-                  <button class="notif-mark-btn" id="btnTestNtfy" onclick="sendTestNtfy()">Test ntfy</button>
+                  <button class="notif-mark-btn" id="btnTestNtfy" onclick="sendTestNtfy()">Test alert</button>
                   <button class="notif-mark-btn" onclick="markAllNotificationsRead()">Mark all read</button>
                 </div>
               </div>
@@ -1345,12 +1341,6 @@
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"/>
               </svg>
               <span>Transactions</span>
-            </button>
-            <button class="sidebar-item" onclick="switchSection('twitterTab', 'Twitter / X', this)">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/>
-              </svg>
-              <span>Twitter / X</span>
             </button>
           </nav>
         </div>
@@ -1558,56 +1548,6 @@
         </thead>
         <tbody id="paymentsTableBody"></tbody>
       </table>
-    </div>
-
-    <!-- Twitter / X Automation Tab -->
-    <div id="twitterTab" class="panel" style="display: none;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/>
-            </svg>
-            <span>Twitter / X Presence & Automation</span>
-          </h3>
-          <p style="font-size: 12px; color: var(--text-muted);">Auto-tweets daily music charts and community drops to build social presence.</p>
-        </div>
-        <div id="twitterStatusBadge">
-          <span class="badge badge-subtle">Checking status...</span>
-        </div>
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 20px;">
-        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
-          <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">Automated Music Drops</h4>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Runs in the background every 12 hours automatically:</p>
-          <div style="font-size: 12px; color: var(--text); line-height: 1.6; margin-bottom: 14px;">
-            <div>• <b>Morning Drop:</b> Global Deezer Trending Tracks</div>
-            <div>• <b>Evening Drop:</b> Sonar Community Most Downloaded</div>
-          </div>
-          <button class="btn-primary" onclick="triggerTweetTrending()" id="btnTweetTrending">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/>
-            </svg>
-            <span>Tweet Trending Tracks Now</span>
-          </button>
-        </div>
-
-        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
-          <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">Compose Announcement</h4>
-          <form onsubmit="handleSendCustomTweet(event)">
-            <div class="form-group" style="margin-bottom: 10px;">
-              <textarea id="customTweetText" class="form-input" rows="3" maxlength="280" placeholder="Post a status update or milestone to your X audience..." required style="resize: vertical;" oninput="updateTweetCounter()"></textarea>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span id="tweetCharCount" style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted);">0 / 280</span>
-              <button type="submit" class="btn-primary" id="btnSendTweet">
-                <span>Publish Tweet</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
     </div>
 
     </main>
@@ -1971,22 +1911,12 @@
           sTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No active sessions logged yet. User activity appears here in real time.</td></tr>';
         }
       }
-
-      // Twitter Status Badge
-      const twBadge = document.getElementById('twitterStatusBadge');
-      if (twBadge) {
-        if (data.twitter_configured) {
-          twBadge.innerHTML = '<span class="badge badge-pass"><span class="status-dot"></span> Active & Connected</span>';
-        } else {
-          twBadge.innerHTML = '<span class="badge badge-subtle">Credentials Missing (Set in .env or Render)</span>';
-        }
-      }
     }
 
     function switchSection(sectionId, title, btn) {
       document.querySelectorAll('.sidebar-item').forEach(function(b) { b.classList.remove('active'); });
       if (btn) btn.classList.add('active');
-      ['overviewSection', 'sessionsTab', 'usersTab', 'downloadsTab', 'paymentsTab', 'twitterTab'].forEach(function(id) {
+      ['overviewSection', 'sessionsTab', 'usersTab', 'downloadsTab', 'paymentsTab'].forEach(function(id) {
         const el = document.getElementById(id);
         if (el) el.style.display = (id === sectionId) ? 'block' : 'none';
       });
@@ -2221,7 +2151,7 @@
         statusBar.style.display = 'block';
         const topic = data.ntfy.url ? data.ntfy.url.split('/').pop() : 'not set';
         const st = data.ntfy.last_status || 'pending';
-        statusBar.innerHTML = 'ntfy: <span class="mono-cell">' + escapeHtml(topic) + '</span> · <span>' + escapeHtml(st) + '</span>';
+        statusBar.innerHTML = 'Alerts: <span class="mono-cell">' + escapeHtml(topic) + '</span> · <span>' + escapeHtml(st) + '</span>';
       }
       if (!listEl || !badgeEl) return;
 
@@ -2328,67 +2258,6 @@
       if (diffSec < 86400 * 2) return 'Yesterday';
       if (diffSec < 86400 * 7) return Math.floor(diffSec / 86400) + 'd ago';
       return date.toLocaleDateString();
-    }
-
-    function updateTweetCounter() {
-      const txt = document.getElementById('customTweetText').value;
-      const cnt = document.getElementById('tweetCharCount');
-      if (cnt) {
-        cnt.textContent = txt.length + ' / 280';
-        if (txt.length > 260) {
-          cnt.style.color = 'var(--danger)';
-        } else {
-          cnt.style.color = 'var(--text-muted)';
-        }
-      }
-    }
-
-    async function triggerTweetTrending() {
-      const btn = document.getElementById('btnTweetTrending');
-      btn.disabled = true;
-      btn.style.opacity = '0.6';
-      try {
-        const res = await fetch('/admin/api/twitter/trending', {method: 'POST'});
-        const json = await res.json();
-        if (json.ok) {
-          alert('Trending tracks tweet published successfully!');
-        } else {
-          alert('Failed to post tweet: ' + (json.error || 'Unknown error'));
-        }
-      } catch (err) {
-        alert('Request failed. Check network or server logs.');
-      } finally {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-      }
-    }
-
-    async function handleSendCustomTweet(e) {
-      e.preventDefault();
-      const txt = document.getElementById('customTweetText').value;
-      const btn = document.getElementById('btnSendTweet');
-      btn.disabled = true;
-      btn.style.opacity = '0.6';
-      try {
-        const res = await fetch('/admin/api/twitter/tweet', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({text: txt})
-        });
-        const json = await res.json();
-        if (json.ok) {
-          alert('Tweet published to X successfully!');
-          document.getElementById('customTweetText').value = '';
-          updateTweetCounter();
-        } else {
-          alert('Failed to post tweet: ' + (json.error || 'Unknown error'));
-        }
-      } catch (err) {
-        alert('Request failed. Check network or server logs.');
-      } finally {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-      }
     }
 
     function openGrantModal() {

@@ -23,12 +23,8 @@ type Config struct {
 	PublicURL        string
 	Port             string
 	NtfyURL          string
+	AdminChatID      int64
 	AdminPassword    string
-	TwitterAPIKey    string
-	TwitterAPISecret string
-	TwitterAccessToken string
-	TwitterAccessSecret string
-	TwitterBotUsername  string
 }
 
 func loadDotEnv(filename string) {
@@ -124,13 +120,9 @@ func LoadConfig() Config {
 		DatabaseURL:      strings.Trim(strings.TrimSpace(os.Getenv("DATABASE_URL")), `"'`),
 		PublicURL:        strings.TrimRight(strings.Trim(strings.TrimSpace(os.Getenv("PUBLIC_URL")), `"'`), "/"),
 		Port:             strings.Trim(strings.TrimSpace(os.Getenv("PORT")), `"'`),
-		NtfyURL:             strings.Trim(strings.TrimSpace(os.Getenv("NTFY_URL")), `"'`),
-		AdminPassword:       strings.Trim(strings.TrimSpace(os.Getenv("ADMIN_PASSWORD")), `"'`),
-		TwitterAPIKey:       strings.Trim(strings.TrimSpace(os.Getenv("TWITTER_API_KEY")), `"'`),
-		TwitterAPISecret:    strings.Trim(strings.TrimSpace(os.Getenv("TWITTER_API_SECRET")), `"'`),
-		TwitterAccessToken:  strings.Trim(strings.TrimSpace(os.Getenv("TWITTER_ACCESS_TOKEN")), `"'`),
-		TwitterAccessSecret: strings.Trim(strings.TrimSpace(os.Getenv("TWITTER_ACCESS_SECRET")), `"'`),
-		TwitterBotUsername:  strings.Trim(strings.TrimSpace(os.Getenv("TWITTER_BOT_USERNAME")), `"'`),
+		NtfyURL:          strings.Trim(strings.TrimSpace(os.Getenv("NTFY_URL")), `"'`),
+		AdminChatID:      func() int64 { v, _ := strconv.ParseInt(strings.Trim(strings.TrimSpace(os.Getenv("ADMIN_CHAT_ID")), `"'`), 10, 64); return v }(),
+		AdminPassword:    strings.Trim(strings.TrimSpace(os.Getenv("ADMIN_PASSWORD")), `"'`),
 	}
 
 	if cfg.AdminPassword == "" {

@@ -17,7 +17,6 @@ import (
 	"sonar/internal/media"
 	"sonar/internal/music"
 	"sonar/internal/payment"
-	"sonar/internal/twitter"
 )
 
 func main() {
@@ -48,27 +47,12 @@ func main() {
 		cfg.TierMonthlyPrice,
 	)
 
-	controller := bot.NewBotController(tgBot, db, groq, dl, ps, deezer, cfg.NtfyURL)
+	controller := bot.NewBotController(tgBot, db, groq, dl, ps, deezer, cfg.NtfyURL, cfg.AdminChatID)
 	controller.NotifyStartup()
 	go controller.StartPaymentWatcher()
 
-	// Initialize Twitter/X Client & Automated Scheduler
-	twBotUsername := cfg.TwitterBotUsername
-	if twBotUsername == "" && tgBot.Self.UserName != "" {
-		twBotUsername = tgBot.Self.UserName
-	}
-	twitterClient := twitter.NewClient(twitter.Config{
-		APIKey:       cfg.TwitterAPIKey,
-		APISecret:    cfg.TwitterAPISecret,
-		AccessToken:  cfg.TwitterAccessToken,
-		AccessSecret: cfg.TwitterAccessSecret,
-		BotUsername:  twBotUsername,
-	})
-	twitterScheduler := twitter.NewScheduler(twitterClient, db, deezer)
-	twitterScheduler.Start()
-
 	// Register Admin Dashboard
-	adminServer := dashboard.NewServer(db, cfg.AdminPassword, cfg.TelegramBotToken, twitterClient, deezer, controller)
+	adminServer := dashboard.NewServer(db, cfg.AdminPassword, cfg.TelegramBotToken, deezer, controller)
 	adminServer.RegisterRoutes(http.DefaultServeMux)
 
 	// Auxiliary HTTP Handlers
