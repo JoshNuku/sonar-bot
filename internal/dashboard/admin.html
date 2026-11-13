@@ -817,6 +817,150 @@
       animation: spin 0.8s linear infinite;
     }
 
+    /* Notifications Bell & Popover */
+    .notif-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .notif-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: var(--danger);
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      border: 1.5px solid var(--bg);
+    }
+
+    .notif-popover {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: 340px;
+      max-width: calc(100vw - 24px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-modal);
+      display: none;
+      flex-direction: column;
+      z-index: 60;
+      overflow: hidden;
+    }
+
+    .notif-popover.open {
+      display: flex;
+    }
+
+    .notif-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .notif-head-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .notif-mark-btn {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      padding: 4px 6px;
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+    }
+
+    .notif-mark-btn:hover {
+      color: var(--text);
+      background: var(--surface-hover);
+    }
+
+    .notif-list {
+      max-height: 360px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .notif-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
+      transition: background-color 0.15s ease;
+    }
+
+    .notif-item:last-child {
+      border-bottom: none;
+    }
+
+    .notif-item.unread {
+      background: var(--surface-subtle);
+    }
+
+    .notif-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-top: 5px;
+      flex-shrink: 0;
+      background: var(--text-dim);
+    }
+
+    .notif-item.unread .notif-dot {
+      background: var(--success);
+    }
+
+    .notif-item.payment .notif-dot {
+      background: #f59e0b;
+    }
+
+    .notif-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .notif-title {
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .notif-desc {
+      color: var(--text-muted);
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .notif-time {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      margin-top: 3px;
+    }
+
     .sidebar-footer {
       border-top: 1px solid var(--border-subtle);
       padding-top: 14px;
@@ -1084,6 +1228,26 @@
         </button>
 
         <div id="navActions" style="display: none; align-items: center; gap: 6px;">
+          <!-- Notifications -->
+          <div class="notif-wrap" id="notifWrap">
+            <button class="btn-icon" id="notifBtn" onclick="toggleNotifications(event)" title="Notifications" aria-label="Notifications">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+              <span class="notif-badge" id="notifBadge">0</span>
+            </button>
+            <div class="notif-popover" id="notifPopover">
+              <div class="notif-head">
+                <span class="notif-head-title">Notifications</span>
+                <button class="notif-mark-btn" onclick="markAllNotificationsRead()">Mark all read</button>
+              </div>
+              <div class="notif-list" id="notifList">
+                <div class="loading-state"><span class="spinner-sm"></span><span>Loading...</span></div>
+              </div>
+            </div>
+          </div>
+
           <!-- Refresh -->
           <button class="btn-secondary" id="refreshBtn" onclick="fetchData()" title="Refresh Data" aria-label="Refresh Data">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1185,12 +1349,6 @@
               <span>Twitter / X</span>
             </button>
           </nav>
-        </div>
-      </div>
-
-      <div class="sidebar-footer">
-        <div class="sidebar-meta">
-          Showing stats &amp; graph for <strong id="sidebarRangeLabel" style="color: var(--text);">Last 7 Days</strong>.
         </div>
       </div>
     </aside>
@@ -1521,9 +1679,10 @@
     let currentRange = 'week';
     let currentChartMetric = 'activity';
     let lastDashboardData = null;
+    let notifPollTimer = null;
 
     const RANGE_LABELS = {
-      today: { short: 'Today', full: 'Today (Last 24 Hours)' },
+      today: { short: 'Today', full: 'Today (Since 12:00 AM UTC)' },
       week:  { short: '7d',    full: 'Last 7 Days' },
       month: { short: '30d',   full: 'Last 30 Days' },
       all:   { short: 'All',   full: 'All Time (12 Months)' }
@@ -1582,6 +1741,9 @@
       document.getElementById('navActions').style.display = 'flex';
       const toggleBtn = document.getElementById('sidebarToggleBtn');
       if (toggleBtn) toggleBtn.style.display = '';
+      if (!notifPollTimer) {
+        notifPollTimer = setInterval(function() { fetchData(true); }, 30000);
+      }
     }
 
     function showLogin() {
@@ -1590,6 +1752,10 @@
       document.getElementById('navActions').style.display = 'none';
       const toggleBtn = document.getElementById('sidebarToggleBtn');
       if (toggleBtn) toggleBtn.style.display = 'none';
+      if (notifPollTimer) {
+        clearInterval(notifPollTimer);
+        notifPollTimer = null;
+      }
     }
 
     function setDataLoading(isLoading) {
@@ -1611,8 +1777,8 @@
       }
     }
 
-    async function fetchData() {
-      setDataLoading(true);
+    async function fetchData(silent) {
+      if (!silent) setDataLoading(true);
       try {
         const res = await fetch('/admin/api/data?range=' + encodeURIComponent(currentRange));
         if (res.status === 401) {
@@ -1624,7 +1790,7 @@
       } catch (e) {
         console.error('Fetch error:', e);
       } finally {
-        setDataLoading(false);
+        if (!silent) setDataLoading(false);
       }
     }
 
@@ -1634,11 +1800,9 @@
         btn.classList.toggle('active', btn.getAttribute('data-range') === range);
       });
       const meta = RANGE_LABELS[range] || RANGE_LABELS.week;
-      const sideLabel = document.getElementById('sidebarRangeLabel');
-      if (sideLabel) sideLabel.textContent = meta.full;
       const subEl = document.getElementById('activeViewSub');
       if (subEl) subEl.textContent = 'Activity, downloads, and revenue for ' + meta.full;
-      fetchData();
+      fetchData(false);
     }
 
     function toggleSidebar(force) {
@@ -1674,6 +1838,7 @@
       document.getElementById('kpiRevenueSub').textContent = 'GHS ' + totalRevGhs + ' all-time';
 
       renderChart(data.chart_series || []);
+      renderNotifications(data);
 
       // Top Requested Tracks
       const topEl = document.getElementById('topSongsList');
@@ -2011,6 +2176,98 @@
         if (tooltipEl) tooltipEl.style.opacity = '0';
       });
     }
+
+    function buildNotifications(data) {
+      const items = [];
+      (data.recent_payments || []).slice(0, 10).forEach(function(p) {
+        const ts = new Date(p.processed_at).getTime() || 0;
+        const amt = ((p.amount_cents || 0) / 100).toFixed(2);
+        items.push({
+          ts: ts,
+          iso: p.processed_at,
+          kind: 'payment',
+          title: 'Pass Purchased · GHS ' + amt,
+          desc: (p.plan_tier || 'Pass') + ' for Chat ID ' + p.chat_id
+        });
+      });
+      (data.recent_sessions || []).slice(0, 20).forEach(function(s) {
+        if (s.session_type !== 'download' && s.session_type !== 'youtube' && s.session_type !== 'search' && s.session_type !== 'payment') {
+          return;
+        }
+        const ts = new Date(s.created_at).getTime() || 0;
+        const who = s.username ? ('@' + s.username) : ('ID ' + s.chat_id);
+        const labelMap = { download: 'Download', youtube: 'YouTube Link', search: 'Search', payment: 'Payment' };
+        items.push({
+          ts: ts,
+          iso: s.created_at,
+          kind: s.session_type,
+          title: (labelMap[s.session_type] || s.session_type) + ' · ' + who,
+          desc: s.details || ''
+        });
+      });
+      items.sort(function(a, b) { return b.ts - a.ts; });
+      return items.slice(0, 20);
+    }
+
+    function renderNotifications(data) {
+      const listEl = document.getElementById('notifList');
+      const badgeEl = document.getElementById('notifBadge');
+      if (!listEl || !badgeEl) return;
+
+      const items = buildNotifications(data);
+      const lastRead = Number(localStorage.getItem('sonar_notif_last_read') || '0');
+      let unreadCount = 0;
+
+      if (items.length === 0) {
+        listEl.innerHTML = '<div style="padding: 24px 16px; text-align: center; color: var(--text-muted); font-size: 12px;">No recent notifications yet.</div>';
+        badgeEl.style.display = 'none';
+        return;
+      }
+
+      listEl.innerHTML = items.map(function(it) {
+        const isUnread = it.ts > lastRead;
+        if (isUnread) unreadCount++;
+        return '<div class="notif-item' + (isUnread ? ' unread' : '') + (it.kind === 'payment' ? ' payment' : '') + '">' +
+          '<span class="notif-dot"></span>' +
+          '<div class="notif-body">' +
+            '<div class="notif-title">' + escapeHtml(it.title) + '</div>' +
+            '<div class="notif-desc">' + escapeHtml(it.desc) + '</div>' +
+            '<div class="notif-time">' + formatRelativeTime(it.iso) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      if (unreadCount > 0) {
+        badgeEl.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+        badgeEl.style.display = 'inline-flex';
+      } else {
+        badgeEl.style.display = 'none';
+      }
+    }
+
+    function toggleNotifications(e) {
+      if (e) e.stopPropagation();
+      const pop = document.getElementById('notifPopover');
+      if (!pop) return;
+      const willOpen = !pop.classList.contains('open');
+      pop.classList.toggle('open', willOpen);
+    }
+
+    function markAllNotificationsRead() {
+      if (!lastDashboardData) return;
+      const items = buildNotifications(lastDashboardData);
+      const latestTs = items.length > 0 ? items[0].ts : Date.now();
+      localStorage.setItem('sonar_notif_last_read', String(latestTs));
+      renderNotifications(lastDashboardData);
+    }
+
+    document.addEventListener('click', function(e) {
+      const wrap = document.getElementById('notifWrap');
+      const pop = document.getElementById('notifPopover');
+      if (pop && pop.classList.contains('open') && wrap && !wrap.contains(e.target)) {
+        pop.classList.remove('open');
+      }
+    });
 
     window.addEventListener('resize', function() {
       if (lastDashboardData && lastDashboardData.chart_series) {

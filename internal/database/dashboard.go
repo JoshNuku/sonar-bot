@@ -276,9 +276,13 @@ func (db *DB) queryChartSeries(ctx context.Context, rangeParam string) []ChartPo
 		trunc = "hour"
 		keyFmt = "2006-01-02 15"
 		labelFmt = "15:00"
+		startTS = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 		endHour := now.Truncate(time.Hour)
-		startTS = endHour.Add(-23 * time.Hour)
-		for i := 0; i < 24; i++ {
+		hours := int(endHour.Sub(startTS).Hours()) + 1
+		if hours < 1 {
+			hours = 1
+		}
+		for i := 0; i < hours; i++ {
 			t := startTS.Add(time.Duration(i) * time.Hour)
 			bucketKeys = append(bucketKeys, t.Format(keyFmt))
 			series = append(series, ChartPoint{Label: t.Format(labelFmt)})
