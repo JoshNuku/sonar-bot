@@ -638,8 +638,296 @@
       margin-top: 20px;
     }
 
+    /* Sidebar & App Shell */
+    .app-shell {
+      display: flex;
+      flex: 1;
+      width: 100%;
+      min-height: calc(100vh - 57px);
+    }
+
+    .sidebar {
+      width: 244px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      padding: 20px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 24px;
+      position: sticky;
+      top: 57px;
+      height: calc(100vh - 57px);
+      overflow-y: auto;
+      z-index: 35;
+      transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .sidebar-group {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .sidebar-section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      padding: 0 10px 6px;
+    }
+
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      font-family: var(--font-sans);
+      transition: all 0.15s ease;
+    }
+
+    .sidebar-item:hover {
+      color: var(--text);
+      background: var(--surface-hover);
+    }
+
+    .sidebar-item.active {
+      color: var(--text);
+      background: var(--surface-subtle);
+      border-color: var(--border);
+      font-weight: 600;
+    }
+
+    .range-pills {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      padding: 0 4px;
+    }
+
+    .range-pill {
+      padding: 7px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+
+    .range-pill:hover {
+      color: var(--text);
+      border-color: var(--text-dim);
+    }
+
+    .range-pill.active {
+      background: var(--accent);
+      color: var(--accent-contrast);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .sidebar-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sidebar-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      padding: 0 6px;
+      line-height: 1.5;
+    }
+
+    .sidebar-toggle {
+      display: none;
+    }
+
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 34;
+    }
+
+    .sidebar-backdrop.open {
+      display: block;
+    }
+
+    .main-content {
+      flex: 1;
+      min-width: 0;
+      padding: 26px 28px;
+      max-width: 1320px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .view-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .view-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .view-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Interactive Chart Panel */
+    .chart-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .chart-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .chart-metric-btn {
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: var(--font-sans);
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .chart-metric-btn:hover {
+      color: var(--text);
+    }
+
+    .chart-metric-btn.active {
+      background: var(--surface-subtle);
+      color: var(--text);
+      border-color: var(--text-dim);
+      font-weight: 600;
+    }
+
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      height: 260px;
+      margin-top: 16px;
+    }
+
+    .chart-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      overflow: visible;
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 9px 12px;
+      font-size: 12px;
+      box-shadow: var(--shadow-modal);
+      opacity: 0;
+      transition: opacity 0.1s ease;
+      z-index: 20;
+      min-width: 150px;
+    }
+
+    .chart-legend {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
     /* Responsive Mobile Rules */
     @media (max-width: 900px) {
+      .sidebar-toggle {
+        display: inline-flex;
+      }
+      .sidebar {
+        position: fixed;
+        top: 57px;
+        left: 0;
+        bottom: 0;
+        height: calc(100vh - 57px);
+        transform: translateX(-100%);
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+      .main-content {
+        padding: 20px 16px;
+      }
       .kpi-grid {
         grid-template-columns: repeat(2, 1fr);
       }
@@ -697,6 +985,11 @@
   <header>
     <div class="header-inner">
       <div class="brand">
+        <button class="btn-icon sidebar-toggle" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Menu" aria-label="Toggle Sidebar" style="display: none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
         <div class="brand-mark" aria-hidden="true">
           <!-- Audio Wave / Sonar Mark -->
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -779,140 +1072,201 @@
   </div>
 
   <!-- Dashboard Main View -->
-  <main id="dashboardView" style="display: none;" class="container">
-    
-    <!-- Metrics Row -->
-    <div class="kpi-grid">
-      <!-- Users -->
-      <div class="kpi-card">
-        <div class="kpi-head">
-          <span class="kpi-title">Registered Users</span>
-          <span class="kpi-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-          </span>
-        </div>
-        <div class="kpi-value" id="kpiUsers">0</div>
-        <div class="kpi-sub" id="kpiActiveToday">0 active today</div>
-      </div>
-
-      <!-- Passes -->
-      <div class="kpi-card">
-        <div class="kpi-head">
-          <span class="kpi-title">Active Passes</span>
-          <span class="kpi-icon" style="color: var(--success);">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-          </span>
-        </div>
-        <div class="kpi-value" id="kpiPasses" style="color: var(--success);">0</div>
-        <div class="kpi-sub">Unlimited access active</div>
-      </div>
-
-      <!-- Downloads -->
-      <div class="kpi-card">
-        <div class="kpi-head">
-          <span class="kpi-title">Downloads Today</span>
-          <span class="kpi-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-            </svg>
-          </span>
-        </div>
-        <div class="kpi-value" id="kpiDownloads">0</div>
-        <div class="kpi-sub" id="kpiTotalCached">0 cached media files</div>
-      </div>
-
-      <!-- Volume -->
-      <div class="kpi-card">
-        <div class="kpi-head">
-          <span class="kpi-title">Volume (Paystack)</span>
-          <span class="kpi-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect width="20" height="14" x="2" y="5" rx="2"/>
-              <line x1="2" x2="22" y1="10" y2="10"/>
-            </svg>
-          </span>
-        </div>
-        <div class="kpi-value" id="kpiRevenue">GHS 0.00</div>
-        <div class="kpi-sub">Gross Mobile Money</div>
-      </div>
-    </div>
-
-    <!-- Analytics Breakdown -->
-    <div class="analytics-grid">
-      <!-- Top Tracks -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-wrap">
-            <span class="panel-icon">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
+  <div id="dashboardView" style="display: none;" class="app-shell">
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar(false)"></div>
+    <aside class="sidebar" id="appSidebar">
+      <div class="sidebar-group">
+        <div>
+          <div class="sidebar-section-label">Navigation</div>
+          <nav class="sidebar-nav">
+            <button class="sidebar-item active" onclick="switchSection('overviewSection', 'Overview', this)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>
               </svg>
-            </span>
-            <span class="panel-title">Top Requested Tracks</span>
-          </div>
-          <span class="panel-sub" id="topSongsSub">Top 5</span>
-        </div>
-        <div id="topSongsList">Loading...</div>
-      </div>
-
-      <!-- Formats -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-wrap">
-            <span class="panel-icon">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7M16 19h6M19 16l3 3-3 3"/>
+              <span>Overview</span>
+            </button>
+            <button class="sidebar-item" onclick="switchSection('sessionsTab', 'Live Sessions', this)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
               </svg>
-            </span>
-            <span class="panel-title">Media Format Distribution</span>
-          </div>
-          <span class="panel-sub">Streams Delivered</span>
+              <span>Live Sessions</span>
+            </button>
+            <button class="sidebar-item" onclick="switchSection('usersTab', 'Users', this)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>
+              </svg>
+              <span>Users</span>
+            </button>
+            <button class="sidebar-item" onclick="switchSection('downloadsTab', 'Recent Downloads', this)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+              </svg>
+              <span>Downloads</span>
+            </button>
+            <button class="sidebar-item" onclick="switchSection('paymentsTab', 'Transactions', this)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+              </svg>
+              <span>Transactions</span>
+            </button>
+            <button class="sidebar-item" onclick="switchSection('twitterTab', 'Twitter / X', this)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/>
+              </svg>
+              <span>Twitter / X</span>
+            </button>
+          </nav>
         </div>
-        <div id="formatStatsList">Loading...</div>
-      </div>
-    </div>
 
-    <!-- Navigation Tabs -->
-    <div class="nav-tabs">
-      <button class="tab-item active" onclick="switchTab('sessionsTab', this)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 6 12 12 16 14"/>
-        </svg>
-        <span>Live Sessions</span>
-      </button>
-      <button class="tab-item" onclick="switchTab('usersTab', this)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>
-        </svg>
-        <span>Users</span>
-      </button>
-      <button class="tab-item" onclick="switchTab('downloadsTab', this)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-        </svg>
-        <span>Recent Downloads</span>
-      </button>
-      <button class="tab-item" onclick="switchTab('paymentsTab', this)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"/>
-        </svg>
-        <span>Transactions</span>
-      </button>
-      <button class="tab-item" onclick="switchTab('twitterTab', this)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/>
-        </svg>
-        <span>Twitter / X</span>
-      </button>
-    </div>
+        <div>
+          <div class="sidebar-section-label">Timeframe</div>
+          <div class="range-pills">
+            <button class="range-pill" data-range="today" onclick="setRange('today')">Today</button>
+            <button class="range-pill active" data-range="week" onclick="setRange('week')">7 Days</button>
+            <button class="range-pill" data-range="month" onclick="setRange('month')">30 Days</button>
+            <button class="range-pill" data-range="all" onclick="setRange('all')">All Time</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-meta">
+          Showing stats &amp; graph for <strong id="sidebarRangeLabel" style="color: var(--text);">Last 7 Days</strong>.
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="view-header">
+        <div>
+          <h2 class="view-title" id="activeViewTitle">Overview</h2>
+          <p class="view-sub" id="activeViewSub">Activity, downloads, and revenue for Last 7 Days</p>
+        </div>
+      </div>
+
+      <section id="overviewSection">
+        <!-- Metrics Row -->
+        <div class="kpi-grid">
+          <!-- Users -->
+          <div class="kpi-card">
+            <div class="kpi-head">
+              <span class="kpi-title" id="kpiUsersLabel">Active Users (7d)</span>
+              <span class="kpi-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </span>
+            </div>
+            <div class="kpi-value" id="kpiUsers">0</div>
+            <div class="kpi-sub" id="kpiActiveToday">0 total registered</div>
+          </div>
+
+          <!-- Passes -->
+          <div class="kpi-card">
+            <div class="kpi-head">
+              <span class="kpi-title">Active Passes</span>
+              <span class="kpi-icon" style="color: var(--success);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+              </span>
+            </div>
+            <div class="kpi-value" id="kpiPasses" style="color: var(--success);">0</div>
+            <div class="kpi-sub">Unlimited access active</div>
+          </div>
+
+          <!-- Downloads -->
+          <div class="kpi-card">
+            <div class="kpi-head">
+              <span class="kpi-title" id="kpiDownloadsLabel">Downloads (7d)</span>
+              <span class="kpi-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+              </span>
+            </div>
+            <div class="kpi-value" id="kpiDownloads">0</div>
+            <div class="kpi-sub" id="kpiTotalCached">0 searches · 0 cached</div>
+          </div>
+
+          <!-- Volume -->
+          <div class="kpi-card">
+            <div class="kpi-head">
+              <span class="kpi-title" id="kpiRevenueLabel">Volume (7d)</span>
+              <span class="kpi-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect width="20" height="14" x="2" y="5" rx="2"/>
+                  <line x1="2" x2="22" y1="10" y2="10"/>
+                </svg>
+              </span>
+            </div>
+            <div class="kpi-value" id="kpiRevenue">GHS 0.00</div>
+            <div class="kpi-sub" id="kpiRevenueSub">GHS 0.00 all-time</div>
+          </div>
+        </div>
+
+        <!-- Activity Graph -->
+        <div class="chart-panel">
+          <div class="chart-header">
+            <div class="panel-title-wrap">
+              <span class="panel-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+              </span>
+              <span class="panel-title" id="chartTitle">Activity Over Time</span>
+            </div>
+            <div class="chart-controls">
+              <button class="chart-metric-btn active" onclick="setChartMetric('activity', this)">Downloads &amp; Searches</button>
+              <button class="chart-metric-btn" onclick="setChartMetric('users', this)">Active Users</button>
+              <button class="chart-metric-btn" onclick="setChartMetric('revenue', this)">Revenue</button>
+            </div>
+          </div>
+          <div class="chart-wrap" id="chartWrap">
+            <svg class="chart-svg" id="activityChartSvg"></svg>
+            <div class="chart-tooltip" id="chartTooltip"></div>
+          </div>
+          <div class="chart-legend" id="chartLegend"></div>
+        </div>
+
+        <!-- Analytics Breakdown -->
+        <div class="analytics-grid">
+          <!-- Top Tracks -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <span class="panel-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
+                  </svg>
+                </span>
+                <span class="panel-title">Top Requested Tracks</span>
+              </div>
+              <span class="panel-sub" id="topSongsSub">Top 8</span>
+            </div>
+            <div id="topSongsList">Loading...</div>
+          </div>
+
+          <!-- Formats -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <span class="panel-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7M16 19h6M19 16l3 3-3 3"/>
+                  </svg>
+                </span>
+                <span class="panel-title">Media Format Distribution</span>
+              </div>
+              <span class="panel-sub">Streams Delivered</span>
+            </div>
+            <div id="formatStatsList">Loading...</div>
+          </div>
+        </div>
+      </section>
 
     <!-- Live Sessions Tab -->
-    <div id="sessionsTab" class="table-wrapper">
+    <div id="sessionsTab" class="table-wrapper" style="display: none;">
       <table>
         <thead>
           <tr>
@@ -1025,7 +1379,8 @@
       </div>
     </div>
 
-  </main>
+    </main>
+  </div>
 
   <!-- Grant Pass Modal -->
   <div class="modal-backdrop" id="grantModal">
@@ -1094,10 +1449,21 @@
       }
     }
 
+    let currentRange = 'week';
+    let currentChartMetric = 'activity';
+    let lastDashboardData = null;
+
+    const RANGE_LABELS = {
+      today: { short: 'Today', full: 'Today (Last 24 Hours)' },
+      week:  { short: '7d',    full: 'Last 7 Days' },
+      month: { short: '30d',   full: 'Last 30 Days' },
+      all:   { short: 'All',   full: 'All Time (12 Months)' }
+    };
+
     // Auth & Navigation
     async function checkAuth() {
       try {
-        const res = await fetch('/admin/api/data');
+        const res = await fetch('/admin/api/data?range=' + encodeURIComponent(currentRange));
         if (res.ok) {
           showDashboard();
           const data = await res.json();
@@ -1143,19 +1509,23 @@
 
     function showDashboard() {
       document.getElementById('loginView').style.display = 'none';
-      document.getElementById('dashboardView').style.display = 'block';
+      document.getElementById('dashboardView').style.display = 'flex';
       document.getElementById('navActions').style.display = 'flex';
+      const toggleBtn = document.getElementById('sidebarToggleBtn');
+      if (toggleBtn) toggleBtn.style.display = '';
     }
 
     function showLogin() {
       document.getElementById('loginView').style.display = 'flex';
       document.getElementById('dashboardView').style.display = 'none';
       document.getElementById('navActions').style.display = 'none';
+      const toggleBtn = document.getElementById('sidebarToggleBtn');
+      if (toggleBtn) toggleBtn.style.display = 'none';
     }
 
     async function fetchData() {
       try {
-        const res = await fetch('/admin/api/data');
+        const res = await fetch('/admin/api/data?range=' + encodeURIComponent(currentRange));
         if (res.status === 401) {
           showLogin();
           return;
@@ -1167,16 +1537,53 @@
       }
     }
 
+    function setRange(range) {
+      currentRange = range;
+      document.querySelectorAll('.range-pill').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-range') === range);
+      });
+      const meta = RANGE_LABELS[range] || RANGE_LABELS.week;
+      const sideLabel = document.getElementById('sidebarRangeLabel');
+      if (sideLabel) sideLabel.textContent = meta.full;
+      const subEl = document.getElementById('activeViewSub');
+      if (subEl) subEl.textContent = 'Activity, downloads, and revenue for ' + meta.full;
+      fetchData();
+      toggleSidebar(false);
+    }
+
+    function toggleSidebar(force) {
+      const sb = document.getElementById('appSidebar');
+      const bd = document.getElementById('sidebarBackdrop');
+      if (!sb || !bd) return;
+      const open = (typeof force === 'boolean') ? force : !sb.classList.contains('open');
+      sb.classList.toggle('open', open);
+      bd.classList.toggle('open', open);
+    }
+
     function renderDashboard(data) {
-      // Metrics
-      document.getElementById('kpiUsers').textContent = Number(data.kpis.total_users).toLocaleString();
-      document.getElementById('kpiActiveToday').textContent = data.kpis.active_today + ' active today';
+      lastDashboardData = data;
+      const rangeKey = data.range || currentRange;
+      const meta = RANGE_LABELS[rangeKey] || RANGE_LABELS.week;
+
+      // Metrics (period-aware with all-time / today context)
+      const activeUsersVal = (rangeKey === 'all') ? data.kpis.total_users : data.kpis.period_active_users;
+      document.getElementById('kpiUsersLabel').textContent = (rangeKey === 'all') ? 'Total Users' : ('Active Users (' + meta.short + ')');
+      document.getElementById('kpiUsers').textContent = Number(activeUsersVal).toLocaleString();
+      document.getElementById('kpiActiveToday').textContent = Number(data.kpis.total_users).toLocaleString() + ' total · ' + data.kpis.active_today + ' today';
+
       document.getElementById('kpiPasses').textContent = Number(data.kpis.active_passes_count).toLocaleString();
-      document.getElementById('kpiDownloads').textContent = Number(data.kpis.downloads_today).toLocaleString();
-      document.getElementById('kpiTotalCached').textContent = Number(data.kpis.total_cached_tracks).toLocaleString() + ' cached files';
-      
-      const revGhs = (data.kpis.total_revenue_cents / 100).toFixed(2);
-      document.getElementById('kpiRevenue').textContent = 'GHS ' + revGhs;
+
+      document.getElementById('kpiDownloadsLabel').textContent = 'Downloads (' + meta.short + ')';
+      document.getElementById('kpiDownloads').textContent = Number(data.kpis.period_downloads).toLocaleString();
+      document.getElementById('kpiTotalCached').textContent = Number(data.kpis.period_searches).toLocaleString() + ' searches · ' + Number(data.kpis.total_cached_tracks).toLocaleString() + ' cached';
+
+      const periodRevGhs = ((data.kpis.period_revenue_cents || 0) / 100).toFixed(2);
+      const totalRevGhs = ((data.kpis.total_revenue_cents || 0) / 100).toFixed(2);
+      document.getElementById('kpiRevenueLabel').textContent = 'Volume (' + meta.short + ')';
+      document.getElementById('kpiRevenue').textContent = 'GHS ' + periodRevGhs;
+      document.getElementById('kpiRevenueSub').textContent = 'GHS ' + totalRevGhs + ' all-time';
+
+      renderChart(data.chart_series || []);
 
       // Top Requested Tracks
       const topEl = document.getElementById('topSongsList');
@@ -1317,14 +1724,204 @@
       }
     }
 
-    function switchTab(tabId, btn) {
-      document.querySelectorAll('.tab-item').forEach(function(b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      ['sessionsTab', 'usersTab', 'downloadsTab', 'paymentsTab', 'twitterTab'].forEach(function(id) {
+    function switchSection(sectionId, title, btn) {
+      document.querySelectorAll('.sidebar-item').forEach(function(b) { b.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+      ['overviewSection', 'sessionsTab', 'usersTab', 'downloadsTab', 'paymentsTab', 'twitterTab'].forEach(function(id) {
         const el = document.getElementById(id);
-        if (el) el.style.display = (id === tabId) ? 'block' : 'none';
+        if (el) el.style.display = (id === sectionId) ? 'block' : 'none';
+      });
+      const titleEl = document.getElementById('activeViewTitle');
+      if (titleEl) titleEl.textContent = title || 'Overview';
+      toggleSidebar(false);
+    }
+
+    function setChartMetric(metric, btn) {
+      currentChartMetric = metric;
+      document.querySelectorAll('.chart-metric-btn').forEach(function(b) { b.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+      if (lastDashboardData && lastDashboardData.chart_series) {
+        renderChart(lastDashboardData.chart_series);
+      }
+    }
+
+    function buildSmoothPath(pts) {
+      if (!pts.length) return '';
+      if (pts.length === 1) return 'M ' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
+      let d = 'M ' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i];
+        const p1 = pts[i + 1];
+        const cx = (p0.x + p1.x) / 2;
+        d += ' C ' + cx.toFixed(1) + ' ' + p0.y.toFixed(1) + ', ' + cx.toFixed(1) + ' ' + p1.y.toFixed(1) + ', ' + p1.x.toFixed(1) + ' ' + p1.y.toFixed(1);
+      }
+      return d;
+    }
+
+    function renderChart(series) {
+      const svg = document.getElementById('activityChartSvg');
+      const legendEl = document.getElementById('chartLegend');
+      const tooltipEl = document.getElementById('chartTooltip');
+      if (!svg || !legendEl) return;
+
+      if (!series || series.length === 0) {
+        svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="var(--text-muted)" font-size="13">No activity data recorded yet for this timeframe.</text>';
+        legendEl.innerHTML = '';
+        return;
+      }
+
+      const wrap = document.getElementById('chartWrap');
+      const W = Math.max((wrap && wrap.clientWidth) ? wrap.clientWidth : 760, 320);
+      const H = 260;
+      const padL = 44, padR = 16, padT = 16, padB = 30;
+      const plotW = W - padL - padR;
+      const plotH = H - padT - padB;
+
+      let configs = [];
+      if (currentChartMetric === 'users') {
+        configs = [{ key: 'users', label: 'Active Users', color: '#38bdf8', format: function(v) { return v + ' users'; } }];
+      } else if (currentChartMetric === 'revenue') {
+        configs = [{ key: 'revenue_cents', label: 'Revenue (GHS)', color: '#22c55e', format: function(v) { return 'GHS ' + (v / 100).toFixed(2); }, scale: 0.01 }];
+      } else {
+        configs = [
+          { key: 'downloads', label: 'Downloads', color: '#22c55e', format: function(v) { return v + ' downloads'; } },
+          { key: 'searches', label: 'Searches', color: '#a78bfa', format: function(v) { return v + ' searches'; } }
+        ];
+      }
+
+      let maxVal = 0;
+      series.forEach(function(pt) {
+        configs.forEach(function(c) {
+          const raw = Number(pt[c.key] || 0);
+          const scaled = c.scale ? raw * c.scale : raw;
+          if (scaled > maxVal) maxVal = scaled;
+        });
+      });
+      if (maxVal <= 0) maxVal = 4;
+      const yMax = Math.ceil(maxVal * 1.15);
+
+      const xFor = function(idx) {
+        if (series.length === 1) return padL + plotW / 2;
+        return padL + (idx / (series.length - 1)) * plotW;
+      };
+      const yFor = function(val) {
+        return padT + plotH - (val / yMax) * plotH;
+      };
+
+      let out = '<defs>';
+      configs.forEach(function(c, idx) {
+        out += '<linearGradient id="grad_' + idx + '" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="' + c.color + '" stop-opacity="0.28"/>' +
+          '<stop offset="100%" stop-color="' + c.color + '" stop-opacity="0.0"/>' +
+        '</linearGradient>';
+      });
+      out += '</defs>';
+
+      // Horizontal gridlines & Y labels
+      const ticks = 4;
+      for (let t = 0; t <= ticks; t++) {
+        const val = (yMax / ticks) * t;
+        const y = yFor(val);
+        const label = (currentChartMetric === 'revenue') ? ('₵' + val.toFixed(0)) : Math.round(val).toString();
+        out += '<line x1="' + padL + '" y1="' + y.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + y.toFixed(1) + '" stroke="var(--border)" stroke-dasharray="3 3" stroke-width="1"/>';
+        out += '<text x="' + (padL - 8) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end" fill="var(--text-dim)" font-size="11" font-family="var(--font-mono)">' + label + '</text>';
+      }
+
+      // Area + Line paths
+      configs.forEach(function(c, idx) {
+        const pts = series.map(function(pt, i) {
+          const raw = Number(pt[c.key] || 0);
+          const scaled = c.scale ? raw * c.scale : raw;
+          return { x: xFor(i), y: yFor(scaled) };
+        });
+        const linePath = buildSmoothPath(pts);
+        const areaPath = linePath + ' L ' + pts[pts.length - 1].x.toFixed(1) + ' ' + (padT + plotH).toFixed(1) + ' L ' + pts[0].x.toFixed(1) + ' ' + (padT + plotH).toFixed(1) + ' Z';
+        out += '<path d="' + areaPath + '" fill="url(#grad_' + idx + ')"/>';
+        out += '<path d="' + linePath + '" fill="none" stroke="' + c.color + '" stroke-width="2.2" stroke-linecap="round"/>';
+      });
+
+      // X-axis labels (thin out for dense series)
+      const step = Math.max(1, Math.ceil(series.length / 8));
+      series.forEach(function(pt, i) {
+        if (i % step === 0 || i === series.length - 1) {
+          const x = xFor(i);
+          out += '<text x="' + x.toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" fill="var(--text-dim)" font-size="11" font-family="var(--font-mono)">' + escapeHtml(pt.label) + '</text>';
+        }
+      });
+
+      // Crosshair + hover dots + interactive hit zones
+      out += '<line id="chartCrosshair" x1="0" y1="' + padT + '" x2="0" y2="' + (padT + plotH) + '" stroke="var(--text-dim)" stroke-width="1" stroke-dasharray="2 2" style="display: none;"/>';
+      configs.forEach(function(c, idx) {
+        out += '<circle id="chartDot_' + idx + '" r="4.5" fill="' + c.color + '" stroke="var(--surface)" stroke-width="2" style="display: none;"/>';
+      });
+
+      const colW = plotW / Math.max(series.length, 1);
+      series.forEach(function(pt, i) {
+        const x = xFor(i) - colW / 2;
+        out += '<rect x="' + Math.max(padL, x).toFixed(1) + '" y="' + padT + '" width="' + colW.toFixed(1) + '" height="' + plotH + '" fill="transparent" data-idx="' + i + '" class="chart-hit"/>';
+      });
+
+      svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      svg.innerHTML = out;
+
+      // Legend
+      legendEl.innerHTML = configs.map(function(c) {
+        return '<span class="legend-item"><span class="legend-dot" style="background:' + c.color + ';"></span>' + c.label + '</span>';
+      }).join('');
+
+      // Hover handlers
+      svg.querySelectorAll('.chart-hit').forEach(function(rect) {
+        rect.addEventListener('mouseenter', function() {
+          const idx = parseInt(rect.getAttribute('data-idx'), 10);
+          const pt = series[idx];
+          const cx = xFor(idx);
+          const ch = document.getElementById('chartCrosshair');
+          if (ch) {
+            ch.setAttribute('x1', cx.toFixed(1));
+            ch.setAttribute('x2', cx.toFixed(1));
+            ch.style.display = 'block';
+          }
+          let html = '<div style="font-weight:600; margin-bottom:4px; font-family:var(--font-mono); color:var(--text);">' + escapeHtml(pt.label) + '</div>';
+          configs.forEach(function(c, cIdx) {
+            const raw = Number(pt[c.key] || 0);
+            const scaled = c.scale ? raw * c.scale : raw;
+            const dot = document.getElementById('chartDot_' + cIdx);
+            if (dot) {
+              dot.setAttribute('cx', cx.toFixed(1));
+              dot.setAttribute('cy', yFor(scaled).toFixed(1));
+              dot.style.display = 'block';
+            }
+            html += '<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--text-muted);">' +
+              '<span><span class="legend-dot" style="background:' + c.color + ';"></span>' + c.label + '</span>' +
+              '<strong style="color:var(--text); font-family:var(--font-mono);">' + c.format(raw) + '</strong>' +
+            '</div>';
+          });
+          if (tooltipEl) {
+            tooltipEl.innerHTML = html;
+            tooltipEl.style.opacity = '1';
+            const leftPos = (cx > W * 0.65) ? (cx - 170) : (cx + 12);
+            tooltipEl.style.left = Math.max(8, leftPos) + 'px';
+            tooltipEl.style.top = '12px';
+          }
+        });
+      });
+
+      svg.addEventListener('mouseleave', function() {
+        const ch = document.getElementById('chartCrosshair');
+        if (ch) ch.style.display = 'none';
+        configs.forEach(function(_, cIdx) {
+          const dot = document.getElementById('chartDot_' + cIdx);
+          if (dot) dot.style.display = 'none';
+        });
+        if (tooltipEl) tooltipEl.style.opacity = '0';
       });
     }
+
+    window.addEventListener('resize', function() {
+      if (lastDashboardData && lastDashboardData.chart_series) {
+        renderChart(lastDashboardData.chart_series);
+      }
+    });
 
     function formatRelativeTime(isoStr) {
       if (!isoStr) return '-';

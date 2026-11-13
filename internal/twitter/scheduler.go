@@ -69,7 +69,7 @@ func (s *Scheduler) runScheduledDrop() {
 	}
 
 	// Evening drop: Sonar community most downloaded
-	dashData, err := s.db.GetDashboardData(ctx)
+	dashData, err := s.db.GetDashboardData(ctx, "today")
 	if err == nil && len(dashData.TopSongs) > 0 {
 		if err := s.client.PostTopDownloaded(ctx, dashData.TopSongs); err != nil {
 			log.Printf("[Twitter Scheduler] Failed to tweet top downloads: %v", err)

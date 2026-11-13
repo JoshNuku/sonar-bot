@@ -2,16 +2,30 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
 type DashboardKPIs struct {
-	TotalUsers        int `json:"total_users"`
-	ActiveToday       int `json:"active_today"`
-	DownloadsToday    int `json:"downloads_today"`
-	TotalCachedTracks int `json:"total_cached_tracks"`
-	TotalRevenueCents int `json:"total_revenue_cents"`
-	ActivePassesCount int `json:"active_passes_count"`
+	TotalUsers         int `json:"total_users"`
+	ActiveToday        int `json:"active_today"`
+	DownloadsToday     int `json:"downloads_today"`
+	TotalCachedTracks  int `json:"total_cached_tracks"`
+	TotalRevenueCents  int `json:"total_revenue_cents"`
+	ActivePassesCount  int `json:"active_passes_count"`
+	PeriodActiveUsers  int `json:"period_active_users"`
+	PeriodDownloads    int `json:"period_downloads"`
+	PeriodSearches     int `json:"period_searches"`
+	PeriodRevenueCents int `json:"period_revenue_cents"`
+	PeriodNewCached    int `json:"period_new_cached"`
+}
+
+type ChartPoint struct {
+	Label        string `json:"label"`
+	Downloads    int    `json:"downloads"`
+	Searches     int    `json:"searches"`
+	Users        int    `json:"users"`
+	RevenueCents int    `json:"revenue_cents"`
 }
 
 type UserRecord struct {
@@ -60,7 +74,9 @@ type SessionRecord struct {
 }
 
 type DashboardData struct {
+	Range           string           `json:"range"`
 	KPIs            DashboardKPIs    `json:"kpis"`
+	ChartSeries     []ChartPoint     `json:"chart_series"`
 	Users           []UserRecord     `json:"users"`
 	RecentDownloads []DownloadRecord `json:"recent_downloads"`
 	RecentPayments  []PaymentRecord  `json:"recent_payments"`
@@ -69,9 +85,17 @@ type DashboardData struct {
 	RecentSessions  []SessionRecord  `json:"recent_sessions"`
 }
 
-// GetDashboardData aggregates users, downloads, payments, and stats for the admin UI.
-func (db *DB) GetDashboardData(ctx context.Context) (*DashboardData, error) {
+// GetDashboardData aggregates users, downloads, payments, and time-series stats for the admin UI.
+func (db *DB) GetDashboardData(ctx context.Context, rangeParam string) (*DashboardData, error) {
+	switch rangeParam {
+	case "today", "week", "month", "all":
+	default:
+		rangeParam = "week"
+	}
+
 	data := &DashboardData{
+		Range:           rangeParam,
+		ChartSeries:     []ChartPoint{},
 		Users:           []UserRecord{},
 		RecentDownloads: []DownloadRecord{},
 		RecentPayments:  []PaymentRecord{},
@@ -80,13 +104,46 @@ func (db *DB) GetDashboardData(ctx context.Context) (*DashboardData, error) {
 		RecentSessions:  []SessionRecord{},
 	}
 
-	// 1. KPIs
+	// 1. KPIs (global + period-scoped)
 	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&data.KPIs.TotalUsers)
 	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE last_reset_date >= CURRENT_DATE`).Scan(&data.KPIs.ActiveToday)
 	_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(SUM(daily_downloads), 0) FROM users WHERE last_reset_date >= CURRENT_DATE`).Scan(&data.KPIs.DownloadsToday)
 	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM media_cache`).Scan(&data.KPIs.TotalCachedTracks)
 	_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(SUM(amount_cents), 0) FROM processed_payments`).Scan(&data.KPIs.TotalRevenueCents)
 	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE is_premium = true OR (premium_until IS NOT NULL AND premium_until > NOW())`).Scan(&data.KPIs.ActivePassesCount)
+
+	if rangeParam == "all" {
+		data.KPIs.PeriodActiveUsers = data.KPIs.TotalUsers
+		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM user_sessions WHERE session_type = 'download'`).Scan(&data.KPIs.PeriodDownloads)
+		if data.KPIs.TotalCachedTracks > data.KPIs.PeriodDownloads {
+			data.KPIs.PeriodDownloads = data.KPIs.TotalCachedTracks
+		}
+		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM user_sessions WHERE session_type IN ('search', 'youtube')`).Scan(&data.KPIs.PeriodSearches)
+		data.KPIs.PeriodRevenueCents = data.KPIs.TotalRevenueCents
+		data.KPIs.PeriodNewCached = data.KPIs.TotalCachedTracks
+	} else {
+		var since time.Time
+		now := time.Now().UTC()
+		switch rangeParam {
+		case "today":
+			since = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		case "week":
+			since = now.Add(-7 * 24 * time.Hour)
+		case "month":
+			since = now.Add(-30 * 24 * time.Hour)
+		}
+		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE last_seen_at >= $1`, since).Scan(&data.KPIs.PeriodActiveUsers)
+		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM user_sessions WHERE session_type = 'download' AND created_at >= $1`, since).Scan(&data.KPIs.PeriodDownloads)
+		if rangeParam == "today" && data.KPIs.DownloadsToday > data.KPIs.PeriodDownloads {
+			data.KPIs.PeriodDownloads = data.KPIs.DownloadsToday
+		}
+		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM user_sessions WHERE session_type IN ('search', 'youtube') AND created_at >= $1`, since).Scan(&data.KPIs.PeriodSearches)
+		_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(SUM(amount_cents), 0) FROM processed_payments WHERE processed_at >= $1`, since).Scan(&data.KPIs.PeriodRevenueCents)
+		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM media_cache WHERE created_at >= $1`, since).Scan(&data.KPIs.PeriodNewCached)
+	}
+
+	// 1b. Time-series chart data
+	data.ChartSeries = db.queryChartSeries(ctx, rangeParam)
 
 	// 2. Users (latest 100 sorted by last login / activity)
 	uRows, err := db.Pool.Query(ctx, `
@@ -201,6 +258,82 @@ func (db *DB) GetDashboardData(ctx context.Context) (*DashboardData, error) {
 	}
 
 	return data, nil
+}
+
+type chartBucketSpec struct {
+	trunc    string
+	lookback string
+	step     string
+	labelFmt string
+}
+
+var chartBucketSpecs = map[string]chartBucketSpec{
+	"today": {trunc: "hour", lookback: "23 hours", step: "1 hour", labelFmt: "HH24:00"},
+	"week":  {trunc: "day", lookback: "6 days", step: "1 day", labelFmt: "Mon DD"},
+	"month": {trunc: "day", lookback: "29 days", step: "1 day", labelFmt: "Mon DD"},
+	"all":   {trunc: "month", lookback: "11 months", step: "1 month", labelFmt: "Mon YY"},
+}
+
+func (db *DB) queryChartSeries(ctx context.Context, rangeParam string) []ChartPoint {
+	spec, ok := chartBucketSpecs[rangeParam]
+	if !ok {
+		spec = chartBucketSpecs["week"]
+	}
+
+	query := fmt.Sprintf(`
+		WITH bounds AS (
+			SELECT
+				DATE_TRUNC('%s', NOW() AT TIME ZONE 'UTC') - INTERVAL '%s' AS start_ts,
+				DATE_TRUNC('%s', NOW() AT TIME ZONE 'UTC') AS end_ts
+		),
+		buckets AS (
+			SELECT generate_series(bounds.start_ts, bounds.end_ts, INTERVAL '%s') AS bucket
+			FROM bounds
+		),
+		sess AS (
+			SELECT
+				DATE_TRUNC('%s', created_at AT TIME ZONE 'UTC') AS bucket,
+				COUNT(*) FILTER (WHERE session_type = 'download') AS downloads,
+				COUNT(*) FILTER (WHERE session_type IN ('search', 'youtube')) AS searches,
+				COUNT(DISTINCT chat_id) AS users
+			FROM user_sessions, bounds
+			WHERE (created_at AT TIME ZONE 'UTC') >= bounds.start_ts
+			GROUP BY 1
+		),
+		pay AS (
+			SELECT
+				DATE_TRUNC('%s', processed_at AT TIME ZONE 'UTC') AS bucket,
+				COALESCE(SUM(amount_cents), 0) AS revenue_cents
+			FROM processed_payments, bounds
+			WHERE (processed_at AT TIME ZONE 'UTC') >= bounds.start_ts
+			GROUP BY 1
+		)
+		SELECT
+			TO_CHAR(b.bucket, '%s') AS label,
+			COALESCE(s.downloads, 0),
+			COALESCE(s.searches, 0),
+			COALESCE(s.users, 0),
+			COALESCE(p.revenue_cents, 0)
+		FROM buckets b
+		LEFT JOIN sess s ON s.bucket = b.bucket
+		LEFT JOIN pay p ON p.bucket = b.bucket
+		ORDER BY b.bucket ASC;
+	`, spec.trunc, spec.lookback, spec.trunc, spec.step, spec.trunc, spec.trunc, spec.labelFmt)
+
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		return []ChartPoint{}
+	}
+	defer rows.Close()
+
+	var series []ChartPoint
+	for rows.Next() {
+		var pt ChartPoint
+		if err := rows.Scan(&pt.Label, &pt.Downloads, &pt.Searches, &pt.Users, &pt.RevenueCents); err == nil {
+			series = append(series, pt)
+		}
+	}
+	return series
 }
 
 // GrantManualPass allows an admin to immediately grant a user premium access for a specific number of hours.

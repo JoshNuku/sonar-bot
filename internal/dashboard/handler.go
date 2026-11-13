@@ -148,7 +148,8 @@ func (s *Server) handleData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := s.db.GetDashboardData(r.Context())
+	rangeParam := r.URL.Query().Get("range")
+	data, err := s.db.GetDashboardData(r.Context(), rangeParam)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("database error: %v", err), http.StatusInternalServerError)
 		return
@@ -157,7 +158,9 @@ func (s *Server) handleData(w http.ResponseWriter, r *http.Request) {
 	isTwitterConfigured := s.twitter != nil && s.twitter.IsConfigured()
 
 	resp := map[string]interface{}{
+		"range":              data.Range,
 		"kpis":               data.KPIs,
+		"chart_series":       data.ChartSeries,
 		"users":              data.Users,
 		"recent_downloads":   data.RecentDownloads,
 		"recent_payments":    data.RecentPayments,
