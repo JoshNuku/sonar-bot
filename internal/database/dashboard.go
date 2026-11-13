@@ -2,7 +2,7 @@ package database
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"time"
 )
 
@@ -260,79 +260,121 @@ func (db *DB) GetDashboardData(ctx context.Context, rangeParam string) (*Dashboa
 	return data, nil
 }
 
-type chartBucketSpec struct {
-	trunc    string
-	lookback string
-	step     string
-	labelFmt string
-}
-
-var chartBucketSpecs = map[string]chartBucketSpec{
-	"today": {trunc: "hour", lookback: "23 hours", step: "1 hour", labelFmt: "HH24:00"},
-	"week":  {trunc: "day", lookback: "6 days", step: "1 day", labelFmt: "Mon DD"},
-	"month": {trunc: "day", lookback: "29 days", step: "1 day", labelFmt: "Mon DD"},
-	"all":   {trunc: "month", lookback: "11 months", step: "1 month", labelFmt: "Mon YY"},
-}
-
 func (db *DB) queryChartSeries(ctx context.Context, rangeParam string) []ChartPoint {
-	spec, ok := chartBucketSpecs[rangeParam]
-	if !ok {
-		spec = chartBucketSpecs["week"]
-	}
+	now := time.Now().UTC()
+	var (
+		trunc      string
+		keyFmt     string
+		labelFmt   string
+		bucketKeys []string
+		series     []ChartPoint
+		startTS    time.Time
+	)
 
-	query := fmt.Sprintf(`
-		WITH bounds AS (
-			SELECT
-				DATE_TRUNC('%s', NOW() AT TIME ZONE 'UTC') - INTERVAL '%s' AS start_ts,
-				DATE_TRUNC('%s', NOW() AT TIME ZONE 'UTC') AS end_ts
-		),
-		buckets AS (
-			SELECT generate_series(bounds.start_ts, bounds.end_ts, INTERVAL '%s') AS bucket
-			FROM bounds
-		),
-		sess AS (
-			SELECT
-				DATE_TRUNC('%s', created_at AT TIME ZONE 'UTC') AS bucket,
-				COUNT(*) FILTER (WHERE session_type = 'download') AS downloads,
-				COUNT(*) FILTER (WHERE session_type IN ('search', 'youtube')) AS searches,
-				COUNT(DISTINCT chat_id) AS users
-			FROM user_sessions, bounds
-			WHERE (created_at AT TIME ZONE 'UTC') >= bounds.start_ts
-			GROUP BY 1
-		),
-		pay AS (
-			SELECT
-				DATE_TRUNC('%s', processed_at AT TIME ZONE 'UTC') AS bucket,
-				COALESCE(SUM(amount_cents), 0) AS revenue_cents
-			FROM processed_payments, bounds
-			WHERE (processed_at AT TIME ZONE 'UTC') >= bounds.start_ts
-			GROUP BY 1
-		)
-		SELECT
-			TO_CHAR(b.bucket, '%s') AS label,
-			COALESCE(s.downloads, 0),
-			COALESCE(s.searches, 0),
-			COALESCE(s.users, 0),
-			COALESCE(p.revenue_cents, 0)
-		FROM buckets b
-		LEFT JOIN sess s ON s.bucket = b.bucket
-		LEFT JOIN pay p ON p.bucket = b.bucket
-		ORDER BY b.bucket ASC;
-	`, spec.trunc, spec.lookback, spec.trunc, spec.step, spec.trunc, spec.trunc, spec.labelFmt)
-
-	rows, err := db.Pool.Query(ctx, query)
-	if err != nil {
-		return []ChartPoint{}
-	}
-	defer rows.Close()
-
-	var series []ChartPoint
-	for rows.Next() {
-		var pt ChartPoint
-		if err := rows.Scan(&pt.Label, &pt.Downloads, &pt.Searches, &pt.Users, &pt.RevenueCents); err == nil {
-			series = append(series, pt)
+	switch rangeParam {
+	case "today":
+		trunc = "hour"
+		keyFmt = "2006-01-02 15"
+		labelFmt = "15:00"
+		endHour := now.Truncate(time.Hour)
+		startTS = endHour.Add(-23 * time.Hour)
+		for i := 0; i < 24; i++ {
+			t := startTS.Add(time.Duration(i) * time.Hour)
+			bucketKeys = append(bucketKeys, t.Format(keyFmt))
+			series = append(series, ChartPoint{Label: t.Format(labelFmt)})
+		}
+	case "month":
+		trunc = "day"
+		keyFmt = "2006-01-02"
+		labelFmt = "Jan 02"
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		startTS = today.AddDate(0, 0, -29)
+		for i := 0; i < 30; i++ {
+			t := startTS.AddDate(0, 0, i)
+			bucketKeys = append(bucketKeys, t.Format(keyFmt))
+			series = append(series, ChartPoint{Label: t.Format(labelFmt)})
+		}
+	case "all":
+		trunc = "month"
+		keyFmt = "2006-01"
+		labelFmt = "Jan 06"
+		thisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		startTS = thisMonth.AddDate(0, -11, 0)
+		for i := 0; i < 12; i++ {
+			t := startTS.AddDate(0, i, 0)
+			bucketKeys = append(bucketKeys, t.Format(keyFmt))
+			series = append(series, ChartPoint{Label: t.Format(labelFmt)})
+		}
+	default: // "week"
+		trunc = "day"
+		keyFmt = "2006-01-02"
+		labelFmt = "Jan 02"
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		startTS = today.AddDate(0, 0, -6)
+		for i := 0; i < 7; i++ {
+			t := startTS.AddDate(0, 0, i)
+			bucketKeys = append(bucketKeys, t.Format(keyFmt))
+			series = append(series, ChartPoint{Label: t.Format(labelFmt)})
 		}
 	}
+
+	idxByKey := make(map[string]int, len(bucketKeys))
+	for i, k := range bucketKeys {
+		idxByKey[k] = i
+	}
+
+	sessQuery := `
+		SELECT
+			DATE_TRUNC($1, created_at AT TIME ZONE 'UTC') AS bucket,
+			COUNT(*) FILTER (WHERE session_type = 'download') AS downloads,
+			COUNT(*) FILTER (WHERE session_type IN ('search', 'youtube')) AS searches,
+			COUNT(DISTINCT chat_id) AS users
+		FROM user_sessions
+		WHERE created_at >= $2
+		GROUP BY 1
+	`
+	sRows, err := db.Pool.Query(ctx, sessQuery, trunc, startTS)
+	if err != nil {
+		log.Printf("queryChartSeries sessions error: %v", err)
+	} else {
+		defer sRows.Close()
+		for sRows.Next() {
+			var bucket time.Time
+			var downloads, searches, users int
+			if scanErr := sRows.Scan(&bucket, &downloads, &searches, &users); scanErr == nil {
+				if idx, ok := idxByKey[bucket.Format(keyFmt)]; ok {
+					series[idx].Downloads = downloads
+					series[idx].Searches = searches
+					series[idx].Users = users
+				}
+			}
+		}
+	}
+
+	payQuery := `
+		SELECT
+			DATE_TRUNC($1, processed_at AT TIME ZONE 'UTC') AS bucket,
+			COALESCE(SUM(amount_cents), 0) AS revenue_cents
+		FROM processed_payments
+		WHERE processed_at >= $2
+		GROUP BY 1
+	`
+	pRows, err := db.Pool.Query(ctx, payQuery, trunc, startTS)
+	if err != nil {
+		log.Printf("queryChartSeries payments error: %v", err)
+	} else {
+		defer pRows.Close()
+		for pRows.Next() {
+			var bucket time.Time
+			var rev int
+			if scanErr := pRows.Scan(&bucket, &rev); scanErr == nil {
+				if idx, ok := idxByKey[bucket.Format(keyFmt)]; ok {
+					series[idx].RevenueCents = rev
+				}
+			}
+		}
+	}
+
 	return series
 }
 

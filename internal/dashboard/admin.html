@@ -95,9 +95,8 @@
     }
 
     .header-inner {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 12px 24px;
+      width: 100%;
+      padding: 12px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -688,6 +687,7 @@
     .sidebar-item {
       display: flex;
       align-items: center;
+      justify-content: flex-start;
       gap: 10px;
       padding: 9px 12px;
       border-radius: var(--radius-md);
@@ -703,6 +703,10 @@
       transition: all 0.15s ease;
     }
 
+    .sidebar-item svg {
+      flex-shrink: 0;
+    }
+
     .sidebar-item:hover {
       color: var(--text);
       background: var(--surface-hover);
@@ -715,37 +719,102 @@
       font-weight: 600;
     }
 
-    .range-pills {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 6px;
-      padding: 0 4px;
+    /* Segmented Timeframe Control */
+    .segmented-control {
+      display: inline-flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 3px;
+      gap: 2px;
     }
 
-    .range-pill {
-      padding: 7px 8px;
+    .seg-btn {
+      padding: 6px 12px;
       border-radius: var(--radius-sm);
       font-size: 12px;
       font-weight: 500;
       font-family: var(--font-sans);
-      background: var(--bg);
+      background: transparent;
       color: var(--text-muted);
-      border: 1px solid var(--border);
+      border: none;
       cursor: pointer;
-      text-align: center;
+      white-space: nowrap;
       transition: all 0.15s ease;
     }
 
-    .range-pill:hover {
+    .seg-btn:hover {
       color: var(--text);
-      border-color: var(--text-dim);
     }
 
-    .range-pill.active {
+    .seg-btn.active {
       background: var(--accent);
       color: var(--accent-contrast);
-      border-color: var(--accent);
       font-weight: 600;
+    }
+
+    /* Loading Spinners */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--border);
+      border-top-color: var(--text);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+
+    .spinner-sm {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .loading-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 28px 16px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .chart-loading {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 10, 10, 0.55);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      color: var(--text-muted);
+      z-index: 15;
+    }
+
+    [data-theme="light"] .chart-loading {
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .chart-loading.active {
+      display: flex;
+    }
+
+    .btn-spinning svg {
+      animation: spin 0.8s linear infinite;
     }
 
     .sidebar-footer {
@@ -1016,7 +1085,7 @@
 
         <div id="navActions" style="display: none; align-items: center; gap: 6px;">
           <!-- Refresh -->
-          <button class="btn-secondary" onclick="fetchData()" title="Refresh Data" aria-label="Refresh Data">
+          <button class="btn-secondary" id="refreshBtn" onclick="fetchData()" title="Refresh Data" aria-label="Refresh Data">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
             </svg>
@@ -1117,16 +1186,6 @@
             </button>
           </nav>
         </div>
-
-        <div>
-          <div class="sidebar-section-label">Timeframe</div>
-          <div class="range-pills">
-            <button class="range-pill" data-range="today" onclick="setRange('today')">Today</button>
-            <button class="range-pill active" data-range="week" onclick="setRange('week')">7 Days</button>
-            <button class="range-pill" data-range="month" onclick="setRange('month')">30 Days</button>
-            <button class="range-pill" data-range="all" onclick="setRange('all')">All Time</button>
-          </div>
-        </div>
       </div>
 
       <div class="sidebar-footer">
@@ -1141,6 +1200,12 @@
         <div>
           <h2 class="view-title" id="activeViewTitle">Overview</h2>
           <p class="view-sub" id="activeViewSub">Activity, downloads, and revenue for Last 7 Days</p>
+        </div>
+        <div class="segmented-control" id="timeframeControl" role="group" aria-label="Timeframe">
+          <button class="seg-btn" data-range="today" onclick="setRange('today')">Today</button>
+          <button class="seg-btn active" data-range="week" onclick="setRange('week')">7 Days</button>
+          <button class="seg-btn" data-range="month" onclick="setRange('month')">30 Days</button>
+          <button class="seg-btn" data-range="all" onclick="setRange('all')">All Time</button>
         </div>
       </div>
 
@@ -1223,6 +1288,10 @@
             </div>
           </div>
           <div class="chart-wrap" id="chartWrap">
+            <div class="chart-loading" id="chartLoading">
+              <span class="spinner-sm"></span>
+              <span>Loading chart...</span>
+            </div>
             <svg class="chart-svg" id="activityChartSvg"></svg>
             <div class="chart-tooltip" id="chartTooltip"></div>
           </div>
@@ -1244,7 +1313,7 @@
               </div>
               <span class="panel-sub" id="topSongsSub">Top 8</span>
             </div>
-            <div id="topSongsList">Loading...</div>
+            <div id="topSongsList"><div class="loading-state"><span class="spinner-sm"></span><span>Loading tracks...</span></div></div>
           </div>
 
           <!-- Formats -->
@@ -1260,7 +1329,7 @@
               </div>
               <span class="panel-sub">Streams Delivered</span>
             </div>
-            <div id="formatStatsList">Loading...</div>
+            <div id="formatStatsList"><div class="loading-state"><span class="spinner-sm"></span><span>Loading formats...</span></div></div>
           </div>
         </div>
       </section>
@@ -1523,7 +1592,27 @@
       if (toggleBtn) toggleBtn.style.display = 'none';
     }
 
+    function setDataLoading(isLoading) {
+      const refreshBtn = document.getElementById('refreshBtn');
+      if (refreshBtn) refreshBtn.classList.toggle('btn-spinning', isLoading);
+      const chartLoading = document.getElementById('chartLoading');
+      if (chartLoading) chartLoading.classList.toggle('active', isLoading);
+
+      if (isLoading && !lastDashboardData) {
+        const spinnerHtml = '<div class="loading-state"><span class="spinner-sm"></span><span>Loading...</span></div>';
+        const topEl = document.getElementById('topSongsList');
+        const fmtEl = document.getElementById('formatStatsList');
+        if (topEl) topEl.innerHTML = spinnerHtml;
+        if (fmtEl) fmtEl.innerHTML = spinnerHtml;
+        ['sessionsTableBody', 'usersTableBody', 'downloadsTableBody', 'paymentsTableBody'].forEach(function(id) {
+          const tb = document.getElementById(id);
+          if (tb) tb.innerHTML = '<tr><td colspan="7"><div class="loading-state"><span class="spinner-sm"></span><span>Loading data...</span></div></td></tr>';
+        });
+      }
+    }
+
     async function fetchData() {
+      setDataLoading(true);
       try {
         const res = await fetch('/admin/api/data?range=' + encodeURIComponent(currentRange));
         if (res.status === 401) {
@@ -1534,12 +1623,14 @@
         renderDashboard(data);
       } catch (e) {
         console.error('Fetch error:', e);
+      } finally {
+        setDataLoading(false);
       }
     }
 
     function setRange(range) {
       currentRange = range;
-      document.querySelectorAll('.range-pill').forEach(function(btn) {
+      document.querySelectorAll('.seg-btn').forEach(function(btn) {
         btn.classList.toggle('active', btn.getAttribute('data-range') === range);
       });
       const meta = RANGE_LABELS[range] || RANGE_LABELS.week;
@@ -1548,7 +1639,6 @@
       const subEl = document.getElementById('activeViewSub');
       if (subEl) subEl.textContent = 'Activity, downloads, and revenue for ' + meta.full;
       fetchData();
-      toggleSidebar(false);
     }
 
     function toggleSidebar(force) {
@@ -1771,7 +1861,12 @@
       }
 
       const wrap = document.getElementById('chartWrap');
-      const W = Math.max((wrap && wrap.clientWidth) ? wrap.clientWidth : 760, 320);
+      const measuredW = wrap ? wrap.getBoundingClientRect().width : 0;
+      if (measuredW === 0) {
+        requestAnimationFrame(function() { renderChart(series); });
+        return;
+      }
+      const W = Math.max(measuredW, 320);
       const H = 260;
       const padL = 44, padR = 16, padT = 16, padB = 30;
       const plotW = W - padL - padR;
