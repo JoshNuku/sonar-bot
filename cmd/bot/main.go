@@ -68,7 +68,7 @@ func main() {
 	twitterScheduler.Start()
 
 	// Register Admin Dashboard
-	adminServer := dashboard.NewServer(db, cfg.AdminPassword, cfg.TelegramBotToken, twitterClient, deezer)
+	adminServer := dashboard.NewServer(db, cfg.AdminPassword, cfg.TelegramBotToken, twitterClient, deezer, controller)
 	adminServer.RegisterRoutes(http.DefaultServeMux)
 
 	// Auxiliary HTTP Handlers

@@ -2,6 +2,7 @@ package bot
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -16,17 +17,19 @@ type Notifier struct {
 	mu           sync.Mutex
 	lastChat     map[int64]time.Time
 	lastDownload map[int64]time.Time
+	lastStatus   string
+	lastSentAt   time.Time
 	client       *http.Client
 }
 
 func NewNotifier(ntfyURL string) *Notifier {
 	return &Notifier{
-		ntfyURL:      strings.TrimSpace(ntfyURL),
+		ntfyURL:      strings.TrimRight(strings.TrimSpace(ntfyURL), "/"),
 		chatCooldown: 30 * time.Minute, // Silent session alert once every 30 minutes per user
 		dlCooldown:   1 * time.Minute,  // Debounce consecutive rapid downloads from same user
 		lastChat:     make(map[int64]time.Time),
 		lastDownload: make(map[int64]time.Time),
-		client:       &http.Client{Timeout: 8 * time.Second},
+		client:       &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -37,16 +40,40 @@ func formatUserTag(chatID int64, username string) string {
 	return fmt.Sprintf("User %d", chatID)
 }
 
-func (n *Notifier) send(title, body, priority, tags string) {
+func (n *Notifier) recordStatus(status string) {
+	n.mu.Lock()
+	n.lastStatus = status
+	n.lastSentAt = time.Now().UTC()
+	n.mu.Unlock()
+}
+
+// Status returns the configured ntfy URL, last delivery status, and last attempt time.
+func (n *Notifier) Status() (string, string, time.Time) {
+	if n == nil {
+		return "", "not configured", time.Time{}
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.ntfyURL, n.lastStatus, n.lastSentAt
+}
+
+func (n *Notifier) sendSync(title, body, priority, tags string) error {
 	if n == nil || n.ntfyURL == "" {
-		return
+		return fmt.Errorf("NTFY_URL is empty")
 	}
 
-	go func() {
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			time.Sleep(2 * time.Second)
+		}
+
 		req, err := http.NewRequest(http.MethodPost, n.ntfyURL, strings.NewReader(body))
 		if err != nil {
-			log.Printf("[ntfy] request creation error: %v", err)
-			return
+			lastErr = fmt.Errorf("request creation error: %w", err)
+			log.Printf("[ntfy] %v", lastErr)
+			n.recordStatus(lastErr.Error())
+			return lastErr
 		}
 		if title != "" {
 			req.Header.Set("Title", title)
@@ -60,17 +87,48 @@ func (n *Notifier) send(title, body, priority, tags string) {
 
 		resp, err := n.client.Do(req)
 		if err != nil {
-			log.Printf("[ntfy] delivery error to %s: %v", n.ntfyURL, err)
-			return
+			lastErr = fmt.Errorf("delivery error to %s: %w", n.ntfyURL, err)
+			log.Printf("[ntfy] %v", lastErr)
+			continue
 		}
-		defer resp.Body.Close()
+
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		resp.Body.Close()
 
 		if resp.StatusCode >= 300 {
-			log.Printf("[ntfy] unexpected response from %s: %d", n.ntfyURL, resp.StatusCode)
-		} else {
-			log.Printf("[ntfy] notification sent successfully (%s): %s", priority, title)
+			lastErr = fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, n.ntfyURL, strings.TrimSpace(string(respBody)))
+			log.Printf("[ntfy] %v", lastErr)
+			if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+				continue
+			}
+			n.recordStatus(lastErr.Error())
+			return lastErr
 		}
+
+		n.recordStatus("OK (200)")
+		log.Printf("[ntfy] notification sent successfully (%s): %s", priority, title)
+		return nil
+	}
+
+	if lastErr != nil {
+		n.recordStatus(lastErr.Error())
+	}
+	return lastErr
+}
+
+func (n *Notifier) send(title, body, priority, tags string) {
+	if n == nil || n.ntfyURL == "" {
+		return
+	}
+
+	go func() {
+		_ = n.sendSync(title, body, priority, tags)
 	}()
+}
+
+// SendTest sends a synchronous test notification and returns any delivery error.
+func (n *Notifier) SendTest() error {
+	return n.sendSync("Sonar Test Notification", "Test alert from Sonar Admin Dashboard.", "default", "bell,white_check_mark")
 }
 
 // NotifyStartup sends an immediate alert when Sonar boots up.
@@ -119,6 +177,6 @@ func (n *Notifier) NotifyDownload(chatID int64, username, trackTitle, format str
 
 // NotifyPayment always sends an immediate high-priority notification when a pass is purchased.
 func (n *Notifier) NotifyPayment(chatID int64, planLabel, currency, amountStr string) {
-	body := fmt.Sprintf("🎉 Chat %d activated %s (%s %s)", chatID, planLabel, currency, amountStr)
-	n.send("💰 Sonar Pass Purchased!", body, "high", "moneybag,tada")
+	body := fmt.Sprintf("Chat %d activated %s (%s %s)", chatID, planLabel, currency, amountStr)
+	n.send("Sonar Pass Purchased!", body, "high", "moneybag,tada")
 }

@@ -1240,8 +1240,12 @@
             <div class="notif-popover" id="notifPopover">
               <div class="notif-head">
                 <span class="notif-head-title">Notifications</span>
-                <button class="notif-mark-btn" onclick="markAllNotificationsRead()">Mark all read</button>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <button class="notif-mark-btn" id="btnTestNtfy" onclick="sendTestNtfy()">Test ntfy</button>
+                  <button class="notif-mark-btn" onclick="markAllNotificationsRead()">Mark all read</button>
+                </div>
               </div>
+              <div id="ntfyStatusBar" style="padding: 8px 14px; border-bottom: 1px solid var(--border-subtle); font-size: 11px; color: var(--text-muted); display: none;"></div>
               <div class="notif-list" id="notifList">
                 <div class="loading-state"><span class="spinner-sm"></span><span>Loading...</span></div>
               </div>
@@ -2212,6 +2216,13 @@
     function renderNotifications(data) {
       const listEl = document.getElementById('notifList');
       const badgeEl = document.getElementById('notifBadge');
+      const statusBar = document.getElementById('ntfyStatusBar');
+      if (statusBar && data.ntfy) {
+        statusBar.style.display = 'block';
+        const topic = data.ntfy.url ? data.ntfy.url.split('/').pop() : 'not set';
+        const st = data.ntfy.last_status || 'pending';
+        statusBar.innerHTML = 'ntfy: <span class="mono-cell">' + escapeHtml(topic) + '</span> · <span>' + escapeHtml(st) + '</span>';
+      }
       if (!listEl || !badgeEl) return;
 
       const items = buildNotifications(data);
@@ -2251,6 +2262,37 @@
       if (!pop) return;
       const willOpen = !pop.classList.contains('open');
       pop.classList.toggle('open', willOpen);
+    }
+
+    async function sendTestNtfy() {
+      const btn = document.getElementById('btnTestNtfy');
+      const statusBar = document.getElementById('ntfyStatusBar');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+      }
+      try {
+        const res = await fetch('/admin/api/ntfy/test', { method: 'POST' });
+        const json = await res.json();
+        if (statusBar) {
+          statusBar.style.display = 'block';
+          if (json.ok) {
+            statusBar.innerHTML = '<span style="color: var(--success);">Test sent to ' + escapeHtml(json.url || 'ntfy') + ' (' + escapeHtml(json.status || 'OK') + ')</span>';
+          } else {
+            statusBar.innerHTML = '<span style="color: var(--danger);">Error: ' + escapeHtml(json.error || 'Failed') + '</span>';
+          }
+        }
+      } catch (e) {
+        if (statusBar) {
+          statusBar.style.display = 'block';
+          statusBar.innerHTML = '<span style="color: var(--danger);">Network error testing ntfy</span>';
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Test ntfy';
+        }
+      }
     }
 
     function markAllNotificationsRead() {

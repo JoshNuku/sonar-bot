@@ -16,15 +16,21 @@ import (
 	"sonar/internal/twitter"
 )
 
+type NtfyService interface {
+	NtfyStatus() (url string, lastStatus string, lastSentAt time.Time)
+	TestNtfy() error
+}
+
 type Server struct {
 	db            *database.DB
 	adminPassword string
 	hmacSecret    []byte
 	twitter       *twitter.Client
 	deezer        *music.DeezerClient
+	ntfy          NtfyService
 }
 
-func NewServer(db *database.DB, adminPassword, secretSalt string, tw *twitter.Client, dz *music.DeezerClient) *Server {
+func NewServer(db *database.DB, adminPassword, secretSalt string, tw *twitter.Client, dz *music.DeezerClient, ntfy NtfyService) *Server {
 	if adminPassword == "" {
 		adminPassword = "sonar2026"
 	}
@@ -35,6 +41,7 @@ func NewServer(db *database.DB, adminPassword, secretSalt string, tw *twitter.Cl
 		hmacSecret:    hash[:],
 		twitter:       tw,
 		deezer:        dz,
+		ntfy:          ntfy,
 	}
 }
 
@@ -85,6 +92,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/api/grant-pass", s.handleGrantPass)
 	mux.HandleFunc("/admin/api/twitter/tweet", s.handleTwitterTweet)
 	mux.HandleFunc("/admin/api/twitter/trending", s.handleTwitterTrending)
+	mux.HandleFunc("/admin/api/ntfy/test", s.handleNtfyTest)
 }
 
 func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +165,11 @@ func (s *Server) handleData(w http.ResponseWriter, r *http.Request) {
 
 	isTwitterConfigured := s.twitter != nil && s.twitter.IsConfigured()
 
+	ntfyURL, ntfyLastStatus, ntfyLastAt := "", "", time.Time{}
+	if s.ntfy != nil {
+		ntfyURL, ntfyLastStatus, ntfyLastAt = s.ntfy.NtfyStatus()
+	}
+
 	resp := map[string]interface{}{
 		"range":              data.Range,
 		"kpis":               data.KPIs,
@@ -168,6 +181,12 @@ func (s *Server) handleData(w http.ResponseWriter, r *http.Request) {
 		"top_songs":          data.TopSongs,
 		"recent_sessions":    data.RecentSessions,
 		"twitter_configured": isTwitterConfigured,
+		"ntfy": map[string]interface{}{
+			"configured":  ntfyURL != "",
+			"url":         ntfyURL,
+			"last_status": ntfyLastStatus,
+			"last_at":     ntfyLastAt,
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -295,5 +314,35 @@ func (s *Server) handleGrantPass(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+}
+
+func (s *Server) handleNtfyTest(w http.ResponseWriter, r *http.Request) {
+	if !s.isAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.ntfy == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": "ntfy service not configured"})
+		return
+	}
+	if err := s.ntfy.TestNtfy(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": err.Error()})
+		return
+	}
+	url, status, _ := s.ntfy.NtfyStatus()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":     true,
+		"url":    url,
+		"status": status,
+	})
 }
 

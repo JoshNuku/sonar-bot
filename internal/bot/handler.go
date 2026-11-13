@@ -369,6 +369,20 @@ func (b *BotController) NotifyStartup() {
 	}
 }
 
+func (b *BotController) NtfyStatus() (string, string, time.Time) {
+	if b.notifier == nil {
+		return "", "not configured", time.Time{}
+	}
+	return b.notifier.Status()
+}
+
+func (b *BotController) TestNtfy() error {
+	if b.notifier == nil {
+		return fmt.Errorf("ntfy notifier not initialized")
+	}
+	return b.notifier.SendTest()
+}
+
 // StartPaymentWatcher reconciles successful Paystack transactions automatically in the background
 // and immediately sends the Telegram subscription confirmation message without any user action.
 func (b *BotController) StartPaymentWatcher() {
